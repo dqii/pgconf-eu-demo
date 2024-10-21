@@ -1,27 +1,12 @@
 import os
 import sys
 import numpy as np
-from pgvector.psycopg2 import register_vector
-import psycopg2
 from dotenv import load_dotenv
-from contextlib import contextmanager
-from pgconf_utils import generate_openai_embedding, generate_ubicloud_embedding, ask_openai, ask_ubicloud
+from pgconf_utils import generate_openai_embedding, generate_ubicloud_embedding, ask_openai, ask_ubicloud, get_cursor
 
 # Load environment variables
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-
-@contextmanager
-def get_cursor():
-    conn = psycopg2.connect(DATABASE_URL)
-    register_vector(conn)
-    cur = conn.cursor()
-    try:
-        yield cur
-    finally:
-        cur.close()
-        conn.close()
 
 
 def query_files(provider, repo, vector, top_k=5):

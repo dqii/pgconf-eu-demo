@@ -1,6 +1,6 @@
 services:
   db:
-    image: pgvector/pgvector:pg17
+    image: lanterndata/lantern-self-hosted:lantern-0.4.0-extras-0.4.0-minor-1
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
@@ -15,17 +15,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  
-  dbmate:
-    image: amacneil/dbmate:latest
-    depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres?sslmode=disable
-    volumes:
-      - ./db:/db
-    command: up
-    restart: on-failure
 
 volumes:
   db_storage:

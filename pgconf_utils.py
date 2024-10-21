@@ -2,7 +2,14 @@ import os
 import requests
 from openai import OpenAI
 from dotenv import load_dotenv
+import psycopg2
+from pgvector.psycopg2 import register_vector
+from contextlib import contextmanager
 load_dotenv()
+
+# Database
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 # Open AI
@@ -19,6 +26,21 @@ UBICLOUD_API_KEY = os.getenv("UBICLOUD_API_KEY")
 UBICLOUD_CONTEXT_WINDOW = 90000
 UBICLOUD_LLM_MODEL = "llama-3-2-3b-it"
 UBICLOUD_VECTOR_MODEL = "e5-mistral-7b-it"
+
+# Context window
+CONTEXT_WINDOW = min(OPENAI_CONTEXT_WINDOW, UBICLOUD_CONTEXT_WINDOW)
+
+
+@contextmanager
+def get_cursor():
+    conn = psycopg2.connect(DATABASE_URL)
+    register_vector(conn)
+    cur = conn.cursor()
+    try:
+        yield cur
+    finally:
+        cur.close()
+        conn.close()
 
 
 def generate_openai_embedding(text: str) -> list:
