@@ -72,14 +72,14 @@ def insert_file(file_name, folder_name, repo_name, file_content, llm_openai, llm
     conn.commit()
 
 
-def insert_commit(repo_name, commit_id, author, date, changes, message, llm_openai, llm_ubicloud):
+def insert_commit(repo_name, commit_id, author, date, changes, title, message, llm_openai, llm_ubicloud):
     INSERT_COMMIT = """
         INSERT INTO commits ("repo", "id", "author", "date", "changes", "title", "message", "llm_openai", "llm_ubicloud")
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT ("repo", "id") DO NOTHING;
     """
     cur.execute(INSERT_COMMIT, (repo_name, commit_id, author, date,
-                changes, message, llm_openai.strip(), llm_ubicloud.strip()))
+                changes, title, message, llm_openai.strip(), llm_ubicloud.strip()))
     conn.commit()
 
 
