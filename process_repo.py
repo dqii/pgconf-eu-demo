@@ -155,17 +155,16 @@ def process_file(file_path, folder_name, repo_name):
 def process_folder(folder_path, repo_path, repo_name):
     if not is_acceptable_folder(folder_path):
         return
-    print("Folder:", folder_path)
+    folder_name = os.path.relpath(folder_path, repo_path)
 
     # If folder already has a summary, skip processing and just return
     cur.execute(
-        """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_path, repo_name))
+        """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_name, repo_name))
     row = cur.fetchone()
     if row:
         return
 
     # Full relative folder path
-    folder_name = os.path.relpath(folder_path, repo_path)
     llm_openai_list = []
     llm_ubicloud_list = []
 
