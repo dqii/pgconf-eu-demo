@@ -76,57 +76,32 @@ with gr.Blocks() as demo:
     submit_btn = gr.Button("Ask")
 
     # Function calls for each of the output panels
-    submit_btn.click(
-        fn=lambda repo, question: chat_without_context(
-            "openai", repo, question),
-        inputs=[repo, question],
-        outputs=output_openai_no_context
-    )
-    submit_btn.click(
-        fn=lambda repo, question: chat_without_context(
-            "ubicloud", repo, question),
-        inputs=[repo, question],
-        outputs=output_ubicloud_no_context
-    )
-    submit_btn.click(
-        fn=lambda repo, question, context_types: chat_with_context(
-            "openai", repo, question, context_types),
-        inputs=[repo, question, context_types],
-        outputs=[output_openai_with_context, output_openai_with_context_prompt]
-    )
-    submit_btn.click(
-        fn=lambda repo, question, context_types: chat_with_context(
-            "ubicloud", repo, question, context_types),
-        inputs=[repo, question, context_types],
-        outputs=[output_ubicloud_with_context,
-                 output_ubicloud_with_context_prompt]
-    )
-
-    question.submit(
-        fn=lambda repo, question: chat_without_context(
-            "openai", repo, question),
-        inputs=[repo, question],
-        outputs=output_openai_no_context
-    )
-    question.submit(
-        fn=lambda repo, question: chat_without_context(
-            "ubicloud", repo, question),
-        inputs=[repo, question],
-        outputs=output_ubicloud_no_context
-    )
-    question.submit(
-        fn=lambda repo, question, context_types: chat_with_context(
-            "openai", repo, question, context_types),
-        inputs=[repo, question, context_types],
-        outputs=[output_openai_with_context, output_openai_with_context_prompt]
-    )
-    question.submit(
-        fn=lambda repo, question, context_types: chat_with_context(
-            "ubicloud", repo, question, context_types),
-        inputs=[repo, question, context_types],
-        outputs=[output_ubicloud_with_context,
-                 output_ubicloud_with_context_prompt]
-    )
+    for f in [submit_btn.click, question.submit]:
+        f(
+            fn=lambda repo, question: chat_without_context(
+                "openai", repo, question),
+            inputs=[repo, question],
+            outputs=output_openai_no_context
+        )
+        f(
+            fn=lambda repo, question: chat_without_context(
+                "ubicloud", repo, question),
+            inputs=[repo, question],
+            outputs=output_ubicloud_no_context
+        )
+        f(
+            fn=lambda repo, question, context_types: chat_with_context(
+                "openai", repo, question, context_types),
+            inputs=[repo, question, context_types],
+            outputs=[output_openai_with_context, output_openai_with_context_prompt]
+        )
+        f(
+            fn=lambda repo, question, context_types: chat_with_context(
+                "ubicloud", repo, question, context_types),
+            inputs=[repo, question, context_types],
+            outputs=[output_ubicloud_with_context,
+                    output_ubicloud_with_context_prompt]
+        )
 
 # Launch the Gradio app.
 demo.launch()
