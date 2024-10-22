@@ -157,65 +157,80 @@ def process_file(file_path, folder_name, repo_name):
         return llm_openai, llm_ubicloud
 
 
+def process_files_in_folder(folder_path, repo_path, repo_name):
+    """
+    Processes all acceptable files in a given folder concurrently.
+    """
+    file_futures = []
+    folder_name = os.path.relpath(folder_path, repo_path)
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        for item in os.listdir(folder_path):
+            item_path = os.path.join(folder_path, item)
+            if os.path.isfile(item_path) and is_acceptable_file(item):
+                # Submit file processing as a task
+                file_futures.append(executor.submit(
+                    process_file, item_path, folder_name, repo_name))
+
+        # Wait for all file processing tasks to complete
+        summaries = []
+        for future in as_completed(file_futures):
+            try:
+                llm_openai, llm_ubicloud = future.result()
+                summaries.append((llm_openai, llm_ubicloud))
+            except Exception as e:
+                print(f"Error processing file in folder '{folder_name}': {e}")
+
+    return summaries
+
+
+def get_description(descriptions, ask, context_window):
+    max_descriptions = int(context_window / 450)
+    if len(descriptions) < max_descriptions:
+        return ask(FOLDER_PROMPT + "\n\n" + "\n".join(descriptions))
+    else:
+        combined_descriptions = []
+        for i in range(0, min(len(descriptions),  max_descriptions * max_descriptions), max_descriptions):
+            combined_description = ask(
+                FOLDER_PROMPT + "\n\n" + "\n".join(descriptions[i:i+max_descriptions]))
+            combined_descriptions.append(combined_description)
+        return ask(FOLDER_SUMMARIES_PROMPT + "\n\n" + "\n".join(combined_descriptions))
+
+
 def process_folder(folder_path, repo_path, repo_name):
     if not is_acceptable_folder(folder_path):
         return
+
     folder_name = os.path.relpath(folder_path, repo_path)
+    print(f"Processing folder: {folder_name}")
 
-    # If folder already has a summary, skip processing and just return
+    # Fetch summaries for subfolders from the database
     cur.execute(
-        """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_name, repo_name))
-    row = cur.fetchone()
-    if row:
-        return
-    print("Folder:", folder_name)
+        """SELECT "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s AND "name" LIKE %s""",
+        (repo_name, folder_name + '/%')
+    )
+    subfolder_summaries = cur.fetchall()
 
-    # Full relative folder path
-    llm_openai_list = []
-    llm_ubicloud_list = []
+    # Process all files in the current folder
+    file_summaries = process_files_in_folder(folder_path, repo_path, repo_name)
 
-    # Process each file in the folder
-    for item in os.listdir(folder_path):
-        item_path = os.path.join(folder_path, item)
-        if os.path.isfile(item_path) and is_acceptable_file(item):
-            llm_openai, llm_ubicloud = process_file(
-                item_path, folder_name, repo_name)
-            if llm_openai:
-                llm_openai_list.append(llm_openai)
-            if llm_ubicloud:
-                llm_ubicloud_list.append(llm_ubicloud)
-        elif os.path.isdir(item_path) and is_acceptable_folder(item_path):
-            # Retrieve the summary of the subfolder from the database
-            subfolder_name = os.path.relpath(item_path, repo_path)
-            cur.execute(
-                """SELECT "llm_openai", "llm_ubicloud" FROM folders WHERE "name" = %s AND "repo" = %s""", (subfolder_name, repo_name))
-            subfolder_row = cur.fetchone()
-            if subfolder_row and subfolder_row[0]:
-                llm_openai = subfolder_row[0][0]
-                llm_ubicloud = subfolder_row[0][1]
-                if llm_openai:
-                    llm_openai_list.append(llm_openai)
-                if llm_ubicloud:
-                    llm_ubicloud_list.append(llm_ubicloud)
+    # Combine file summaries and subfolder summaries
+    combined_summaries = file_summaries + [
+        (llm_openai, llm_ubicloud) for llm_openai, llm_ubicloud in subfolder_summaries
+    ]
 
-    def get_description(descriptions, ask, context_window):
-        max_descriptions = int(context_window / 450)
-        if len(descriptions) < max_descriptions:
-            return ask(FOLDER_PROMPT + "\n\n" + "\n".join(descriptions))
-        else:
-            combined_descriptions = []
-            for i in range(0, min(len(descriptions),  max_descriptions * max_descriptions), max_descriptions):
-                combined_description = ask(
-                    FOLDER_PROMPT + "\n\n" + "\n".join(descriptions[i:i+max_descriptions]))
-                combined_descriptions.append(combined_description)
-            return ask(FOLDER_SUMMARIES_PROMPT + "\n\n" + "\n".join(combined_descriptions))
+    # Generate a folder summary from combined summaries
+    if combined_summaries:
+        llm_openai = get_description(
+            [summary[0] for summary in combined_summaries if summary[0]
+             ], ask_openai, OPENAI_CONTEXT_WINDOW
+        )
+        llm_ubicloud = get_description(
+            [summary[1] for summary in combined_summaries if summary[1]
+             ], ask_ubicloud, UBICLOUD_CONTEXT_WINDOW
+        )
+        insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud)
 
-    llm_openai = get_description(
-        llm_openai_list, ask_openai, OPENAI_CONTEXT_WINDOW)
-    llm_ubicloud = get_description(
-        llm_ubicloud_list, ask_ubicloud, UBICLOUD_CONTEXT_WINDOW)
-
-    insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud)
+    return combined_summaries
 
 
 def extract_files_changed(diff_content):
