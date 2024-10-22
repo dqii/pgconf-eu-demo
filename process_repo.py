@@ -163,6 +163,7 @@ def process_folder(folder_path, repo_path, repo_name):
     row = cur.fetchone()
     if row:
         return
+    print("Folder:", folder_name)
 
     # Full relative folder path
     llm_openai_list = []
