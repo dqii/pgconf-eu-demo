@@ -33,6 +33,7 @@ create table if not exists commits (
     "author" text,
     "date" text,
     "changes" text,
+    "title" text,
     "message" text,
     "llm_openai" text,
     "llm_ubicloud" text,
