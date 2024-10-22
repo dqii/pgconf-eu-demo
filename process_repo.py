@@ -29,6 +29,11 @@ def is_acceptable_file(file_name):
         '.yaml', '.yml', '.xml', '.md', '.txt', '.sh', '.sql', '.ts', '.h', '.c', '.cpp', '.hpp', '.php', '.jsx', '.tsx', '.swift', '.kt', '.cs', '.out'
     ]
     ACCEPTABLE_FILENAMES = {'Makefile', 'Dockerfile', '.env'}
+    REJECTED_FILENAMES = 'package-lock.json'
+
+    if any(file_name.endswith(suffix) for suffix in REJECTED_FILENAMES):
+        return False
+
     return (
         any(file_name.endswith(suffix) for suffix in ACCEPTABLE_SUFFIXES) or
         file_name in ACCEPTABLE_FILENAMES
@@ -98,9 +103,9 @@ def chunk_file(file_content, context_window):
 
         # If we've reached a size limit
         if (
-            (current_size >= context_window and (
-                re.match(r'^\}', line) or re.match(r'^\};', line) or re.match(r'^\];$', line)))
-            or (current_size >= 2 * context_window and (re.match(r'^\s{2}\}', line)))
+            (current_size >= context_window and re.match(
+                r'^(\}|\};|\]|\];|\)|\);)$', line))
+            or (current_size >= 2 * context_window and re.match(r'^\s{2}(\}|\};|\]|\];|\)|\);)$', line))
             or (current_size >= 3 * context_window)
         ):
             chunks.append("\n".join(current_chunk))
