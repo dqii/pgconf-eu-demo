@@ -48,13 +48,11 @@ def generate_ubicloud_embedding(text: str) -> list:
     return response['data'][0]['embedding']
 
 
-def ask_openai(prompt: str) -> str:
+def ask_openai(system_prompt: str, user_prompt: str) -> str:
     chat_completion = client.chat.completions.create(
         messages=[
-            {
-                "role": "user",
-                "content": prompt,
-            }
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
         ],
         model=OPENAI_LLM_MODEL,
     )
@@ -64,14 +62,17 @@ def ask_openai(prompt: str) -> str:
     return response.strip()
 
 
-def ask_ubicloud(prompt: str) -> str:
+def ask_ubicloud(system_prompt: str, user_prompt: str) -> str:
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {UBICLOUD_API_KEY}"
     }
     data = {
         "model": UBICLOUD_LLM_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
         "stream": False
     }
     response = requests.post(UBICLOUD_LLM_API_URL, headers=headers, json=data)

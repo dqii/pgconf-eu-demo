@@ -1,6 +1,6 @@
 import os
-import sys
 import json
+import argparse
 import psycopg2
 from pgconf_utils import generate_openai_embedding, generate_ubicloud_embedding
 from dotenv import load_dotenv
@@ -20,97 +20,152 @@ FETCH_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHER
 FETCH_FILES = """SELECT "name", "folder", "llm_openai", "llm_ubicloud" FROM files WHERE "vector_openai" IS NULL AND "repo" = %s;"""
 FETCH_COMMITS = """SELECT "repo", "id", "llm_openai", "llm_ubicloud" FROM commits WHERE "vector_openai" IS NULL AND "repo" = %s;"""
 
+# SQL queries to fetch repos, folders, and files missing embeddings -- override
+FETCH_OVERRIDE_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s;"""
+FETCH_OVERRIDE_FILES = """SELECT "name", "folder", "llm_openai", "llm_ubicloud" FROM files WHERE "repo" = %s;"""
+FETCH_OVERRIDE_COMMITS = """SELECT "repo", "id", "llm_openai", "llm_ubicloud" FROM commits WHERE "repo" = %s;"""
+
 # SQL query to update embedding
 UPDATE_EMBEDDING_FOLDER = """UPDATE folders SET vector_openai = %s, vector_ubicloud = %s WHERE "name" = %s AND repo = %s"""
 UPDATE_EMBEDDING_FILE = """UPDATE files SET vector_openai = %s, vector_ubicloud = %s WHERE "name" = %s AND folder = %s AND repo = %s;"""
 UPDATE_EMBEDDING_COMMIT = """UPDATE commits SET vector_openai = %s, vector_ubicloud = %s WHERE "repo" = %s AND "id" = %s;"""
 
+# SQL query to update embedding -- OpenAI
+UPDATE_EMBEDDING_FOLDER_OPENAI = """UPDATE folders SET vector_openai = %s WHERE "name" = %s AND repo = %s"""
+UPDATE_EMBEDDING_FILE_OPENAI = """UPDATE files SET vector_openai = %s WHERE "name" = %s AND folder = %s AND repo = %s;"""
+UPDATE_EMBEDDING_COMMIT_OPENAI = """UPDATE commits SET vector_openai = %s WHERE "repo" = %s AND "id" = %s;"""
 
-def update_folder_embedding(repo, folder):
+# SQL query to update embedding -- Ubicloud
+UPDATE_EMBEDDING_FOLDER_UBICLOUD = """UPDATE folders SET vector_ubicloud = %s WHERE "name" = %s AND repo = %s"""
+UPDATE_EMBEDDING_FILE_UBICLOUD = """UPDATE files SET vector_ubicloud = %s WHERE "name" = %s AND folder = %s AND repo = %s;"""
+UPDATE_EMBEDDING_COMMIT_UBICLOUD = """UPDATE commits SET vector_ubicloud = %s WHERE "repo" = %s AND "id" = %s;"""
+
+
+def update_folder_embedding(repo, folder, provider):
     name, llm_openai, llm_ubicloud = folder
-    if llm_openai:
-        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+    vector_openai = vector_ubicloud = None
+
+    if llm_openai and (not provider or provider == 'openai'):
         vector_openai = generate_openai_embedding(llm_openai)
+    if llm_ubicloud and (not provider or provider == 'ubicloud'):
+        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+
+    if vector_openai and vector_ubicloud:
         cur.execute(UPDATE_EMBEDDING_FOLDER,
                     (json.dumps(vector_openai), json.dumps(vector_ubicloud), name, repo))
-        conn.commit()
+    elif vector_openai:
+        cur.execute(UPDATE_EMBEDDING_FOLDER_OPENAI,
+                    (json.dumps(vector_openai), name, repo))
+    elif vector_ubicloud:
+        cur.execute(UPDATE_EMBEDDING_FOLDER_UBICLOUD,
+                    (json.dumps(vector_ubicloud), name, repo))
+    conn.commit()
 
 
-def update_file_embedding(repo, file):
+def update_file_embedding(repo, file, provider):
     name, folder, llm_openai, llm_ubicloud = file
-    if llm_openai:
-        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+    vector_openai = vector_ubicloud = None
+
+    if llm_openai and (not provider or provider == 'openai'):
         vector_openai = generate_openai_embedding(llm_openai)
+    if llm_ubicloud and (not provider or provider == 'ubicloud'):
+        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+
+    if vector_openai and vector_ubicloud:
         cur.execute(UPDATE_EMBEDDING_FILE,
                     (json.dumps(vector_openai), json.dumps(vector_ubicloud), name, folder, repo))
-        conn.commit()
+    elif vector_openai:
+        cur.execute(UPDATE_EMBEDDING_FILE_OPENAI,
+                    (json.dumps(vector_openai), name, folder, repo))
+    elif vector_ubicloud:
+        cur.execute(UPDATE_EMBEDDING_FILE_UBICLOUD,
+                    (json.dumps(vector_ubicloud), name, folder, repo))
+    conn.commit()
 
 
-def update_commit_embedding(repo, commit):
+def update_commit_embedding(repo, commit, provider):
     repo, commit_id, llm_openai, llm_ubicloud = commit
-    if llm_openai:
-        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+    vector_openai = vector_ubicloud = None
+
+    if llm_openai and (not provider or provider == 'openai'):
         vector_openai = generate_openai_embedding(llm_openai)
+    if llm_ubicloud and (not provider or provider == 'ubicloud'):
+        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+
+    if vector_openai and vector_ubicloud:
         cur.execute(UPDATE_EMBEDDING_COMMIT,
                     (json.dumps(vector_openai), json.dumps(vector_ubicloud), repo, commit_id))
-        conn.commit()
+    elif vector_openai:
+        cur.execute(UPDATE_EMBEDDING_COMMIT_OPENAI,
+                    (json.dumps(vector_openai), repo, commit_id))
+    elif vector_ubicloud:
+        cur.execute(UPDATE_EMBEDDING_COMMIT_UBICLOUD,
+                    (json.dumps(vector_ubicloud), repo, commit_id))
+    conn.commit()
 
 
-def backfill_folders(repo):
-    cur.execute(FETCH_FOLDERS, (repo, ))
+def backfill_folders(repo, provider=None, override=False):
+    cur.execute(FETCH_OVERRIDE_FOLDERS if override else FETCH_FOLDERS, (repo, ))
     folders = cur.fetchall()
     print(f"Backfilling {len(folders)} folders...")
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(
-            update_folder_embedding, repo, folder) for folder in folders]
+            update_folder_embedding, repo, folder, provider) for folder in folders]
         for future in as_completed(futures):
-            future.result()  # Raise exceptions if any occurred during processing
+            future.result()
 
     print("Backfilling for folders complete.")
 
 
-def backfill_files(repo):
-    cur.execute(FETCH_FILES, (repo, ))
+def backfill_files(repo, provider=None, override=False):
+    cur.execute(FETCH_OVERRIDE_FILES if override else FETCH_FILES, (repo, ))
     files = cur.fetchall()
     print(f"Backfilling {len(files)} files...")
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(
-            update_file_embedding, repo, file) for file in files]
+            update_file_embedding, repo, file, provider) for file in files]
         for future in as_completed(futures):
             future.result()
 
     print("Backfilling for files complete.")
 
 
-def backfill_commits(repo):
-    cur.execute(FETCH_COMMITS, (repo, ))
+def backfill_commits(repo, provider=None, override=False):
+    cur.execute(FETCH_OVERRIDE_COMMITS if override else FETCH_COMMITS, (repo, ))
     commits = cur.fetchall()
     print(f"Backfilling {len(commits)} commits...")
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(
-            update_commit_embedding, repo, commit) for commit in commits]
+            update_commit_embedding, repo, commit, provider) for commit in commits]
         for future in as_completed(futures):
             future.result()
 
     print("Backfilling for commits complete.")
 
 
-def backfill(repo):
-    backfill_folders(repo)
-    backfill_files(repo)
-    backfill_commits(repo)
+def backfill(repo, provider=None, override=False):
+    backfill_folders(repo, provider, override)
+    backfill_files(repo, provider, override)
+    backfill_commits(repo, provider, override)
     print("Backfilling complete.")
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print("Usage: python backfill_embeddings.py <repo_name>")
-        sys.exit(1)
-    repo = sys.argv[1]
-    backfill(repo)
+    parser = argparse.ArgumentParser(
+        description="Backfill embeddings with optional parameters.")
+    parser.add_argument("repo", nargs='?', default=None,
+                        help="The name of the repository to backfill (optional).")
+    parser.add_argument(
+        "--provider", choices=['openai', 'ubicloud'], help="Specify the provider.")
+    parser.add_argument("--override", action='store_true',
+                        help="Enable override mode for backfilling.")
+
+    args = parser.parse_args()
+
+    backfill(args.repo, args.provider, args.override)
 
     cur.close()
     conn.close()

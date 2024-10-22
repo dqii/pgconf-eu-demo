@@ -122,11 +122,12 @@ def ask_question(provider: str, repo: str, question: str, context_types, return_
     if provider not in ["openai", "ubicloud"]:
         raise ValueError("Invalid provider. Must be 'openai' or 'ubicloud'.")
 
-    prompt = get_prompt(provider, repo, question, context_types)
+    user_prompt = get_prompt(provider, repo, question, context_types)
+    system_prompt = f"You are a helpful agent who answers questions about the {repo} codebase. You will be given context about the codebase and asked questions about it. Please provide detailed answers to the best of your ability."
     ask = ask_openai if provider == "openai" else ask_ubicloud
-    answer = ask(prompt)
+    answer = ask(system_prompt, user_prompt)
     if return_prompt:
-        return answer, prompt
+        return answer, user_prompt
     return answer
 
 
