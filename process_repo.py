@@ -2,10 +2,13 @@ import os
 import re
 import sys
 import psycopg2
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pgconf_utils import ask_openai, ask_ubicloud, OPENAI_CONTEXT_WINDOW, UBICLOUD_CONTEXT_WINDOW
 from dotenv import load_dotenv
 from backfill_embeddings import backfill
 load_dotenv()
+
+MAX_WORKERS = 200
 
 FILE_PROMPT = """Here is some code. Summarize what the code does."""
 FILE_SUMMARIES_PROMPT = """Here are multiple summaries of sections of a file. Summarize what the code does."""
@@ -66,8 +69,8 @@ def insert_file(file_name, folder_name, repo_name, file_content, llm_openai, llm
 
 def insert_commit(repo_name, commit_id, author, date, changes, message, llm_openai, llm_ubicloud):
     INSERT_COMMIT = """
-        INSERT INTO commits ("repo", "id", "author", "date", "changes", "message", "llm_openai", "llm_ubicloud")
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO commits ("repo", "id", "author", "date", "changes", "title", "message", "llm_openai", "llm_ubicloud")
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT ("repo", "id") DO NOTHING;
     """
     cur.execute(INSERT_COMMIT, (repo_name, commit_id, author, date,
@@ -226,6 +229,22 @@ def extract_files_changed(diff_content):
     return list(files_changed)
 
 
+def process_commit(repo_name, commit_id, author, date, changes, title, message):
+    author_email = f"{author}"
+    if len(changes) < min(OPENAI_CONTEXT_WINDOW, UBICLOUD_CONTEXT_WINDOW):
+        input_text = f"{message}\nChanges: {changes}\nAuthor: {author_email}\nDate: {date}"
+    else:
+        files_changed = extract_files_changed(changes)
+        input_text = f"{message}\nFiles changed: {', '.join(files_changed)}\nAuthor: {author_email}\nDate: {date}"
+
+    llm_ubicloud = ask_ubicloud(COMMIT_PROMPT + "\n\n" + input_text)
+    llm_openai = ask_openai(COMMIT_PROMPT + "\n\n" + input_text)
+
+    # Insert the summarized commit into the database
+    insert_commit(repo_name, commit_id, author, date,
+                  changes, title, message, llm_openai, llm_ubicloud)
+
+
 def process_commits(repo_path, repo_name):
     # Extract commit data using git log
     os.system(
@@ -244,36 +263,23 @@ def process_commits(repo_path, repo_name):
     commit_id = author_name = author_email = commit_date = title = message = ""
     changes_list = []
     in_diff_section = False
-    commit_count = 0
+
+    # Store commit data for parallel processing
+    commit_data_list = []
 
     def maybe_save_commit():
-        nonlocal commit_count
-        if commit_id in processed_commit_ids:
-            return
-        if commit_id:
+        if commit_id and commit_id not in processed_commit_ids:
             changes = "\n".join(changes_list)
             author = f"{author_name} <{author_email}>"
-            if len(changes) < min(OPENAI_CONTEXT_WINDOW, UBICLOUD_CONTEXT_WINDOW):
-                input = f"{title}\n{message}\nChanges: {changes}\nAuthor: {author}>\nDate: {commit_date}"
-            else:
-                files_changed = extract_files_changed(changes)
-                input = f"{title}\n{message}\Files changed: {', '.join(files_changed)}\nAuthor: {author}>\nDate: {commit_date}"
-            llm_ubicloud = ask_ubicloud(COMMIT_PROMPT + "\n\n" + input)
-            llm_openai = ask_openai(COMMIT_PROMPT + "\n\n" + input)
-            insert_commit(repo_name, commit_id, author, commit_date,
-                          changes, message, llm_openai, llm_ubicloud)
-            commit_count += 1
-            if commit_count % 10 == 0:
-                print(f"Processed {commit_count} commits...")
+            commit_data_list.append(
+                (repo_name, commit_id, author, commit_date, changes, title, message))
 
-    # Process each line to extract and insert commit data
+    # Process each line to extract commit data
     for line in lines:
         line = line.strip()
-        print(line)
 
         if line.startswith("COMMIT_HASH:"):
             maybe_save_commit()
-
             # Start reading a new commit
             commit_id = line.split("COMMIT_HASH:")[1].strip()
             in_diff_section = False
@@ -299,9 +305,24 @@ def process_commits(repo_path, repo_name):
     # Insert the last commit's data
     maybe_save_commit()
 
+    # Process commits in parallel using ThreadPoolExecutor
+    print(f"Processing {len(commit_data_list)} commits in parallel...")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [
+            executor.submit(process_commit, *commit_data)
+            for commit_data in commit_data_list
+        ]
+        for future in as_completed(futures):
+            try:
+                future.result()  # Raise any exceptions that occurred during processing
+            except Exception as e:
+                print(f"Error processing a commit: {e}")
+
     # Delete the temporary commit data file
     if os.path.exists('commit_data.txt'):
         os.remove('commit_data.txt')
+
+    print("Commit processing complete.")
 
 
 def main(repo_name):
@@ -328,10 +349,10 @@ def main(repo_name):
         process_folder(root, repo_path, repo_name)
 
     # Process commits
-    # print("Processing commits...")
-    # process_commits(repo_path, repo_name)
+    print("Processing commits...")
+    process_commits(repo_path, repo_name)
 
-    # insert_repo(repo_name)
+    insert_repo(repo_name)
 
     backfill(repo_name)
 
