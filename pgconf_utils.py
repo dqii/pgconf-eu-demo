@@ -5,20 +5,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# Open AI
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_KEY)
 OPENAI_LLM_MODEL = "gpt-4o-mini"
 OPENAI_VECTOR_MODEL = "text-embedding-3-small"
 OPENAI_CONTEXT_WINDOW = 128000
 
-# Ubicloud
 UBICLOUD_LLM_API_URL = 'https://llama-3-2-3b-it.ai.ubicloud.com/v1/chat/completions'
 UBICLOUD_VECTOR_API_URL = 'https://e5-mistral-7b-it.ai.ubicloud.com/v1/embeddings'
 UBICLOUD_API_KEY = os.getenv("UBICLOUD_API_KEY")
 UBICLOUD_CONTEXT_WINDOW = 90000
 UBICLOUD_LLM_MODEL = "llama-3-2-3b-it"
 UBICLOUD_VECTOR_MODEL = "e5-mistral-7b-it"
+
+CONTEXT_WINDOW = min(OPENAI_CONTEXT_WINDOW, UBICLOUD_CONTEXT_WINDOW)
 
 
 def generate_openai_embedding(text: str) -> list:

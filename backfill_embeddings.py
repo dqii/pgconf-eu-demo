@@ -1,7 +1,7 @@
 import os
 import json
 import argparse
-import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 from pgconf_utils import generate_openai_embedding, generate_ubicloud_embedding
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -9,11 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
 MAX_WORKERS = 200
+MIN_CONNECTIONS = 10
 
 # DB connection
 DATABASE_URL = os.getenv("DATABASE_URL")
-conn = psycopg2.connect(DATABASE_URL)
-cur = conn.cursor()
+connection_pool = ThreadedConnectionPool(
+    MIN_CONNECTIONS, MAX_WORKERS, DATABASE_URL)
 
 # SQL queries to fetch repos, folders, and files missing embeddings
 FETCH_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHERE "vector_openai" IS NULL AND "repo" = %s;"""
@@ -41,109 +42,147 @@ UPDATE_EMBEDDING_FILE_UBICLOUD = """UPDATE files SET vector_ubicloud = %s WHERE 
 UPDATE_EMBEDDING_COMMIT_UBICLOUD = """UPDATE commits SET vector_ubicloud = %s WHERE "repo" = %s AND "id" = %s;"""
 
 
+def get_db_connection():
+    return connection_pool.getconn()
+
+
+def release_db_connection(conn):
+    connection_pool.putconn(conn)
+
+
 def update_folder_embedding(repo, folder, provider):
-    name, llm_openai, llm_ubicloud = folder
-    vector_openai = vector_ubicloud = None
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            name, llm_openai, llm_ubicloud = folder
+            vector_openai = vector_ubicloud = None
 
-    if llm_openai and (not provider or provider == 'openai'):
-        vector_openai = generate_openai_embedding(llm_openai)
-    if llm_ubicloud and (not provider or provider == 'ubicloud'):
-        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+            if llm_openai and (not provider or provider == 'openai'):
+                vector_openai = generate_openai_embedding(llm_openai)
+            if llm_ubicloud and (not provider or provider == 'ubicloud'):
+                vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
 
-    if vector_openai and vector_ubicloud:
-        cur.execute(UPDATE_EMBEDDING_FOLDER,
-                    (json.dumps(vector_openai), json.dumps(vector_ubicloud), name, repo))
-    elif vector_openai:
-        cur.execute(UPDATE_EMBEDDING_FOLDER_OPENAI,
-                    (json.dumps(vector_openai), name, repo))
-    elif vector_ubicloud:
-        cur.execute(UPDATE_EMBEDDING_FOLDER_UBICLOUD,
-                    (json.dumps(vector_ubicloud), name, repo))
-    conn.commit()
+            if vector_openai and vector_ubicloud:
+                cur.execute(UPDATE_EMBEDDING_FOLDER,
+                            (json.dumps(vector_openai), json.dumps(vector_ubicloud), name, repo))
+            elif vector_openai:
+                cur.execute(UPDATE_EMBEDDING_FOLDER_OPENAI,
+                            (json.dumps(vector_openai), name, repo))
+            elif vector_ubicloud:
+                cur.execute(UPDATE_EMBEDDING_FOLDER_UBICLOUD,
+                            (json.dumps(vector_ubicloud), name, repo))
+            conn.commit()
+    finally:
+        release_db_connection(conn)
 
 
 def update_file_embedding(repo, file, provider):
-    name, folder, llm_openai, llm_ubicloud = file
-    vector_openai = vector_ubicloud = None
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            name, folder, llm_openai, llm_ubicloud = file
+            vector_openai = vector_ubicloud = None
 
-    if llm_openai and (not provider or provider == 'openai'):
-        vector_openai = generate_openai_embedding(llm_openai)
-    if llm_ubicloud and (not provider or provider == 'ubicloud'):
-        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+            if llm_openai and (not provider or provider == 'openai'):
+                vector_openai = generate_openai_embedding(llm_openai)
+            if llm_ubicloud and (not provider or provider == 'ubicloud'):
+                vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
 
-    if vector_openai and vector_ubicloud:
-        cur.execute(UPDATE_EMBEDDING_FILE,
-                    (json.dumps(vector_openai), json.dumps(vector_ubicloud), name, folder, repo))
-    elif vector_openai:
-        cur.execute(UPDATE_EMBEDDING_FILE_OPENAI,
-                    (json.dumps(vector_openai), name, folder, repo))
-    elif vector_ubicloud:
-        cur.execute(UPDATE_EMBEDDING_FILE_UBICLOUD,
-                    (json.dumps(vector_ubicloud), name, folder, repo))
-    conn.commit()
+            if vector_openai and vector_ubicloud:
+                cur.execute(UPDATE_EMBEDDING_FILE,
+                            (json.dumps(vector_openai), json.dumps(vector_ubicloud), name, folder, repo))
+            elif vector_openai:
+                cur.execute(UPDATE_EMBEDDING_FILE_OPENAI,
+                            (json.dumps(vector_openai), name, folder, repo))
+            elif vector_ubicloud:
+                cur.execute(UPDATE_EMBEDDING_FILE_UBICLOUD,
+                            (json.dumps(vector_ubicloud), name, folder, repo))
+            conn.commit()
+    finally:
+        release_db_connection(conn)
 
 
 def update_commit_embedding(repo, commit, provider):
-    repo, commit_id, llm_openai, llm_ubicloud = commit
-    vector_openai = vector_ubicloud = None
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            repo, commit_id, llm_openai, llm_ubicloud = commit
+            vector_openai = vector_ubicloud = None
 
-    if llm_openai and (not provider or provider == 'openai'):
-        vector_openai = generate_openai_embedding(llm_openai)
-    if llm_ubicloud and (not provider or provider == 'ubicloud'):
-        vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
+            if llm_openai and (not provider or provider == 'openai'):
+                vector_openai = generate_openai_embedding(llm_openai)
+            if llm_ubicloud and (not provider or provider == 'ubicloud'):
+                vector_ubicloud = generate_ubicloud_embedding(llm_ubicloud)
 
-    if vector_openai and vector_ubicloud:
-        cur.execute(UPDATE_EMBEDDING_COMMIT,
-                    (json.dumps(vector_openai), json.dumps(vector_ubicloud), repo, commit_id))
-    elif vector_openai:
-        cur.execute(UPDATE_EMBEDDING_COMMIT_OPENAI,
-                    (json.dumps(vector_openai), repo, commit_id))
-    elif vector_ubicloud:
-        cur.execute(UPDATE_EMBEDDING_COMMIT_UBICLOUD,
-                    (json.dumps(vector_ubicloud), repo, commit_id))
-    conn.commit()
+            if vector_openai and vector_ubicloud:
+                cur.execute(UPDATE_EMBEDDING_COMMIT,
+                            (json.dumps(vector_openai), json.dumps(vector_ubicloud), repo, commit_id))
+            elif vector_openai:
+                cur.execute(UPDATE_EMBEDDING_COMMIT_OPENAI,
+                            (json.dumps(vector_openai), repo, commit_id))
+            elif vector_ubicloud:
+                cur.execute(UPDATE_EMBEDDING_COMMIT_UBICLOUD,
+                            (json.dumps(vector_ubicloud), repo, commit_id))
+            conn.commit()
+    finally:
+        release_db_connection(conn)
 
 
 def backfill_folders(repo, provider=None, override=False):
-    cur.execute(FETCH_OVERRIDE_FOLDERS if override else FETCH_FOLDERS, (repo, ))
-    folders = cur.fetchall()
-    print(f"Backfilling {len(folders)} folders...")
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                FETCH_OVERRIDE_FOLDERS if override else FETCH_FOLDERS, (repo,))
+            folders = cur.fetchall()
+        print(f"Backfilling {len(folders)} folders...")
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(
-            update_folder_embedding, repo, folder, provider) for folder in folders]
-        for future in as_completed(futures):
-            future.result()
-
-    print("Backfilling for folders complete.")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(
+                update_folder_embedding, repo, folder, provider) for folder in folders]
+            for future in as_completed(futures):
+                future.result()
+        print("Backfilling for folders complete.")
+    finally:
+        release_db_connection(conn)
 
 
 def backfill_files(repo, provider=None, override=False):
-    cur.execute(FETCH_OVERRIDE_FILES if override else FETCH_FILES, (repo, ))
-    files = cur.fetchall()
-    print(f"Backfilling {len(files)} files...")
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                FETCH_OVERRIDE_FILES if override else FETCH_FILES, (repo,))
+            files = cur.fetchall()
+        print(f"Backfilling {len(files)} files...")
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(
-            update_file_embedding, repo, file, provider) for file in files]
-        for future in as_completed(futures):
-            future.result()
-
-    print("Backfilling for files complete.")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(
+                update_file_embedding, repo, file, provider) for file in files]
+            for future in as_completed(futures):
+                future.result()
+        print("Backfilling for files complete.")
+    finally:
+        release_db_connection(conn)
 
 
 def backfill_commits(repo, provider=None, override=False):
-    cur.execute(FETCH_OVERRIDE_COMMITS if override else FETCH_COMMITS, (repo, ))
-    commits = cur.fetchall()
-    print(f"Backfilling {len(commits)} commits...")
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                FETCH_OVERRIDE_COMMITS if override else FETCH_COMMITS, (repo,))
+            commits = cur.fetchall()
+        print(f"Backfilling {len(commits)} commits...")
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(
-            update_commit_embedding, repo, commit, provider) for commit in commits]
-        for future in as_completed(futures):
-            future.result()
-
-    print("Backfilling for commits complete.")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(
+                update_commit_embedding, repo, commit, provider) for commit in commits]
+            for future in as_completed(futures):
+                future.result()
+        print("Backfilling for commits complete.")
+    finally:
+        release_db_connection(conn)
 
 
 def backfill(repo, provider=None, override=False):
@@ -167,5 +206,5 @@ if __name__ == '__main__':
 
     backfill(args.repo, args.provider, args.override)
 
-    cur.close()
-    conn.close()
+    # Close the connection pool after all work is done
+    connection_pool.closeall()
