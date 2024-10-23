@@ -317,6 +317,7 @@ def process_folder(folder_path, repo_path, repo_name, provider, override):
             (repo_name, folder_name + '/%')
         )
         subfolder_summaries = cur.fetchall()
+    release_db_connection(conn)
 
     # Process all files in the current folder
     file_summaries = process_files_in_folder(
@@ -341,8 +342,6 @@ def process_folder(folder_path, repo_path, repo_name, provider, override):
                  ], ask_ubicloud, UBICLOUD_CONTEXT_WINDOW
             )
         insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud)
-
-    release_db_connection(conn)
 
 
 def extract_files_changed(diff_content):
