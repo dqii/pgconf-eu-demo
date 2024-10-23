@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+from typing import Literal
 from pgvector.psycopg2 import register_vector
 import psycopg2
 from dotenv import load_dotenv
@@ -11,6 +12,8 @@ from pgconf_utils import generate_openai_embedding, generate_ubicloud_embedding,
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+
+ContextFormat = Literal["Code Summaries", "Raw Code"]
 
 @contextmanager
 def get_cursor():
@@ -38,6 +41,20 @@ def query_files(provider, repo, vector, top_k=5):
         cur.execute(FETCH_FILES, (repo, vector, top_k))
         files = cur.fetchall()
         return files
+
+def query_files_bm25(provider, repo, question, top_k=5):
+    FETCH_FILES_BM25 = f"""
+        SELECT name, code, folder, llm_{provider}
+        FROM search_bm25('files', 'id', ARRAY['code_stemmed'], %s, result_limit =>100)
+        LEFT JOIN files ON id = doc_id
+        WHERE repo = %s
+        LIMIT %s;
+    """
+    with get_cursor() as cur:
+        cur.execute(FETCH_FILES_BM25, (question, repo, top_k))
+        files = cur.fetchall()
+        return files
+
 
 
 def query_folders(provider, repo, vector, top_k=5):
@@ -72,7 +89,7 @@ def query_commits(provider, repo, vector, top_k=5):
         return commits
 
 
-def get_prompt(provider: str, repo: str, question: str, context_types) -> str:
+def get_prompt(provider: str, repo: str, question: str, context_types, context_format: ContextFormat | None) -> str:
     if provider not in ["openai", "ubicloud"]:
         raise ValueError("Invalid provider. Must be 'openai' or 'ubicloud'.")
 
@@ -91,8 +108,21 @@ def get_prompt(provider: str, repo: str, question: str, context_types) -> str:
         files = query_files(provider, repo, vector)
         for file in files:
             name, code, folder_name, description = file
+
+
+            if context_format == "Raw Code":
+                prompt_desc = code
+            else:
+                prompt_desc = description
+
             context.append(
-                f"FILE: {name}\nFOLDER: {folder_name}\nDESCRIPTION:\n{description}")
+                f"FILE: {name}\nFOLDER: {folder_name}\nDESCRIPTION:\n{prompt_desc}")
+
+        # files_bm25 = query_files_bm25(provider, repo, question)
+        # for file in files_bm25:
+        #     name, code, folder_name, description = file
+        #     context.append(
+        #         f"FILE_BM25: {name}\nFOLDER: {folder_name}\nDESCRIPTION:\n{code}")
 
     if "commits" in context_types:
         commits = query_commits(provider, repo, vector)
@@ -109,7 +139,10 @@ def get_prompt(provider: str, repo: str, question: str, context_types) -> str:
         map(lambda i: f"**CONTEXT {i + 1} / {context_count}**\n" +
             context[i], range(context_count))
     )
-    prompt = '\n'.join([f"Answer the question about the {repo} repo using the provided context. Cite specific portions of the given context if they were relevant to answering the question.",
+    prompt = '\n'.join([f"Answer the question about the {repo} repo using the provided context.",
+                        "Note that only a subset of provided content may be relevant for answering the question.",
+                        "Use the relevant content to answer the question specifically in stead of incorporating irrelevant context into the answer.",
+                        "Cite specific portions of the given context if they were relevant to answering the question.",
                         '-------------------------------',
                         '**QUESTION**: ' + question,
                         '-------------------------------',
@@ -118,11 +151,11 @@ def get_prompt(provider: str, repo: str, question: str, context_types) -> str:
     return prompt
 
 
-def ask_question(provider: str, repo: str, question: str, context_types, return_prompt=False) -> str:
+def ask_question(provider: str, repo: str, question: str, context_types = None, context_format: ContextFormat | None = None, return_prompt=False) -> str | tuple[str, str]:
     if provider not in ["openai", "ubicloud"]:
         raise ValueError("Invalid provider. Must be 'openai' or 'ubicloud'.")
 
-    user_prompt = get_prompt(provider, repo, question, context_types)
+    user_prompt = get_prompt(provider, repo, question, context_types, context_format)
     system_prompt = f"You are a helpful agent who answers questions about the {repo} codebase. You will be given context about the codebase and asked questions about it. Please provide detailed answers to the best of your ability."
     ask = ask_openai if provider == "openai" else ask_ubicloud
     answer = ask(system_prompt, user_prompt)
@@ -141,9 +174,9 @@ if __name__ == '__main__':
     question = sys.argv[3]
     context_types = ["folders", "files", "commits"]
 
-    prompt = get_prompt(provider, repo_name, question, context_types)
+    prompt = get_prompt(provider, repo_name, question, context_types, "Code Summaries")
     print(prompt)
 
-    answer = ask_question(provider, repo_name, question)
+    answer = ask_question(provider, repo_name, question, context_types)
     print("Answer:")
     print(answer)
