@@ -22,10 +22,9 @@ Then, connect to the database
 psql "$DATABASE_URL"
 ```
 
-Next, enable the Lantern extension:
+Next, configure the Lantern environment
 
 ```sql
-CREATE EXTENSION vector;
 ALTER SYSTEM SET lantern_extras.enable_daemon=true;
 SELECT pg_reload_conf();
 ```

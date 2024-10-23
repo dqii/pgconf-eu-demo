@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
-COMPLETION_MODEL = "openai/gpt-4o-mini"
+COMPLETION_MODEL = "gpt-4o-mini"
 EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 conn = psycopg2.connect(DATABASE_URL)
