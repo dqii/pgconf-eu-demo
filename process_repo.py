@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import argparse
 from psycopg2.pool import ThreadedConnectionPool
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,7 +9,7 @@ from dotenv import load_dotenv
 from backfill_embeddings import backfill
 load_dotenv()
 
-MAX_WORKERS = 200
+MAX_WORKERS = 20
 MIN_CONNECTIONS = 1
 MAX_CONNECTIONS = 20
 
@@ -28,47 +29,47 @@ COMMIT_PROMPT = """You are a helpful code assistant. You will receive a commit, 
 INSERT_COMMIT = """
     INSERT INTO commits ("repo", "id", "author", "date", "changes", "title", "message", "llm_openai", "llm_ubicloud")
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-    ON CONFLICT ("repo", "id") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai", "llm_ubicloud" = EXCLUDED."llm_ubicloud";
+    ON CONFLICT ("repo", "id") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai", "llm_ubicloud" = EXCLUDED."llm_ubicloud", "updated_at" = now();
 """
 INSERT_COMMIT_OPENAI = """
     INSERT INTO commits ("repo", "id", "author", "date", "changes", "title", "message", "llm_openai")
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    ON CONFLICT ("repo", "id") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai";
+    ON CONFLICT ("repo", "id") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai", "updated_at" = now();
 """
 INSERT_COMMIT_UBICLOUD = """
     INSERT INTO commits ("repo", "id", "author", "date", "changes", "title", "message", "llm_ubicloud")
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    ON CONFLICT ("repo", "id") DO UPDATE SET "llm_ubicloud" = EXCLUDED."llm_ubicloud";
+    ON CONFLICT ("repo", "id") DO UPDATE SET "llm_ubicloud" = EXCLUDED."llm_ubicloud", "updated_at" = now();
 """
 INSERT_FOLDER = """
     INSERT INTO folders ("name", "repo", "llm_openai", "llm_ubicloud")
     VALUES (%s, %s, %s, %s)
-    ON CONFLICT ("name", "repo") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai", "llm_ubicloud" = EXCLUDED."llm_ubicloud";
+    ON CONFLICT ("name", "repo") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai", "llm_ubicloud" = EXCLUDED."llm_ubicloud", "updated_at" = now();
 """
 INSERT_FOLDER_OPENAI = """
     INSERT INTO folders ("name", "repo", "llm_openai")
     VALUES (%s, %s, %s)
-    ON CONFLICT ("name", "repo") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai";
+    ON CONFLICT ("name", "repo") DO UPDATE SET "llm_openai" = EXCLUDED."llm_openai", "updated_at" = now();
 """
 INSERT_FOLDER_UBICLOUD = """
     INSERT INTO folders ("name", "repo", "llm_ubicloud")
     VALUES (%s, %s, %s)
-    ON CONFLICT ("name", "repo") DO UPDATE SET "llm_ubicloud" = EXCLUDED."llm_ubicloud";
+    ON CONFLICT ("name", "repo") DO UPDATE SET "llm_ubicloud" = EXCLUDED."llm_ubicloud", "updated_at" = now();
 """
 INSERT_FILE = """
     INSERT INTO files ("name", "folder", "repo", "code", "llm_openai", "llm_ubicloud")
     VALUES (%s, %s, %s, %s, %s, %s)
-    ON CONFLICT ("name", "folder", "repo") DO UPDATE SET "code" = EXCLUDED."code", "llm_openai" = EXCLUDED."llm_openai", "llm_ubicloud" = EXCLUDED."llm_ubicloud";
+    ON CONFLICT ("name", "folder", "repo") DO UPDATE SET "code" = EXCLUDED."code", "llm_openai" = EXCLUDED."llm_openai", "llm_ubicloud" = EXCLUDED."llm_ubicloud", "updated_at" = now();
 """
 INSERT_FILE_OPENAI = """
     INSERT INTO files ("name", "folder", "repo", "code", "llm_openai")
     VALUES (%s, %s, %s, %s, %s)
-    ON CONFLICT ("name", "folder", "repo") DO UPDATE SET "code" = EXCLUDED."code", "llm_openai" = EXCLUDED."llm_openai";
+    ON CONFLICT ("name", "folder", "repo") DO UPDATE SET "code" = EXCLUDED."code", "llm_openai" = EXCLUDED."llm_openai", "updated_at" = now();
 """
 INSERT_FILE_UBICLOUD = """
     INSERT INTO files ("name", "folder", "repo", "code", "llm_ubicloud")
     VALUES (%s, %s, %s, %s, %s)
-    ON CONFLICT ("name", "folder", "repo") DO UPDATE SET "code" = EXCLUDED."code", "llm_ubicloud" = EXCLUDED."llm_ubicloud";
+    ON CONFLICT ("name", "folder", "repo") DO UPDATE SET "code" = EXCLUDED."code", "llm_ubicloud" = EXCLUDED."llm_ubicloud", "updated_at" = now();
 """
 
 
@@ -340,6 +341,8 @@ def process_folder(folder_path, repo_path, repo_name, provider, override):
                  ], ask_ubicloud, UBICLOUD_CONTEXT_WINDOW
             )
         insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud)
+
+    release_db_connection(conn)
 
 
 def extract_files_changed(diff_content):

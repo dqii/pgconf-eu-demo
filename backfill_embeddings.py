@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
-MAX_WORKERS = 200
+MAX_WORKERS = 20
 MAX_CONNECTIONS = 20
 MIN_CONNECTIONS = 10
 
@@ -28,19 +28,19 @@ FETCH_OVERRIDE_FILES = """SELECT "name", "folder", "llm_openai", "llm_ubicloud" 
 FETCH_OVERRIDE_COMMITS = """SELECT "repo", "id", "llm_openai", "llm_ubicloud" FROM commits WHERE "repo" = %s;"""
 
 # SQL query to update embedding
-UPDATE_EMBEDDING_FOLDER = """UPDATE folders SET vector_openai = %s, vector_ubicloud = %s WHERE "name" = %s AND repo = %s"""
-UPDATE_EMBEDDING_FILE = """UPDATE files SET vector_openai = %s, vector_ubicloud = %s WHERE "name" = %s AND folder = %s AND repo = %s;"""
-UPDATE_EMBEDDING_COMMIT = """UPDATE commits SET vector_openai = %s, vector_ubicloud = %s WHERE "repo" = %s AND "id" = %s;"""
+UPDATE_EMBEDDING_FOLDER = """UPDATE folders SET vector_openai = %s, vector_ubicloud = %s, updated_at = now() WHERE "name" = %s AND repo = %s"""
+UPDATE_EMBEDDING_FILE = """UPDATE files SET vector_openai = %s, vector_ubicloud = %s, updated_at = now( WHERE "name" = %s AND folder = %s AND repo = %s;"""
+UPDATE_EMBEDDING_COMMIT = """UPDATE commits SET vector_openai = %s, vector_ubicloud = %s, updated_at = now( WHERE "repo" = %s AND "id" = %s;"""
 
 # SQL query to update embedding -- OpenAI
-UPDATE_EMBEDDING_FOLDER_OPENAI = """UPDATE folders SET vector_openai = %s WHERE "name" = %s AND repo = %s"""
-UPDATE_EMBEDDING_FILE_OPENAI = """UPDATE files SET vector_openai = %s WHERE "name" = %s AND folder = %s AND repo = %s;"""
-UPDATE_EMBEDDING_COMMIT_OPENAI = """UPDATE commits SET vector_openai = %s WHERE "repo" = %s AND "id" = %s;"""
+UPDATE_EMBEDDING_FOLDER_OPENAI = """UPDATE folders SET vector_openai = %s, updated_at = now( WHERE "name" = %s AND repo = %s"""
+UPDATE_EMBEDDING_FILE_OPENAI = """UPDATE files SET vector_openai = %s, updated_at = now( WHERE "name" = %s AND folder = %s AND repo = %s;"""
+UPDATE_EMBEDDING_COMMIT_OPENAI = """UPDATE commits SET vector_openai = %s, updated_at = now( WHERE "repo" = %s AND "id" = %s;"""
 
 # SQL query to update embedding -- Ubicloud
-UPDATE_EMBEDDING_FOLDER_UBICLOUD = """UPDATE folders SET vector_ubicloud = %s WHERE "name" = %s AND repo = %s"""
-UPDATE_EMBEDDING_FILE_UBICLOUD = """UPDATE files SET vector_ubicloud = %s WHERE "name" = %s AND folder = %s AND repo = %s;"""
-UPDATE_EMBEDDING_COMMIT_UBICLOUD = """UPDATE commits SET vector_ubicloud = %s WHERE "repo" = %s AND "id" = %s;"""
+UPDATE_EMBEDDING_FOLDER_UBICLOUD = """UPDATE folders SET vector_ubicloud = %s, updated_at = now( WHERE "name" = %s AND repo = %s"""
+UPDATE_EMBEDDING_FILE_UBICLOUD = """UPDATE files SET vector_ubicloud = %s, updated_at = now( WHERE "name" = %s AND folder = %s AND repo = %s;"""
+UPDATE_EMBEDDING_COMMIT_UBICLOUD = """UPDATE commits SET vector_ubicloud = %s, updated_at = now( WHERE "repo" = %s AND "id" = %s;"""
 
 
 def get_db_connection():
@@ -135,7 +135,7 @@ def backfill_folders(repo, provider=None, override=None):
         with conn.cursor() as cur:
             query = FETCH_OVERRIDE_FOLDERS if override else FETCH_FOLDERS
             if override:
-                query += " AND updated_at > %s"
+                query += " AND updated_at < %s"
                 cur.execute(query, (repo, override))
             else:
                 cur.execute(query, (repo,))
@@ -158,7 +158,7 @@ def backfill_files(repo, provider=None, override=None):
         with conn.cursor() as cur:
             query = FETCH_OVERRIDE_FILES if override else FETCH_FILES
             if override:
-                query += " AND updated_at > %s"
+                query += " AND updated_at < %s"
                 cur.execute(query, (repo, override))
             else:
                 cur.execute(query, (repo,))
@@ -181,7 +181,7 @@ def backfill_commits(repo, provider=None, override=None):
         with conn.cursor() as cur:
             query = FETCH_OVERRIDE_COMMITS if override else FETCH_COMMITS
             if override:
-                query += " AND updated_at > %s"
+                query += " AND updated_at < %s"
                 cur.execute(query, (repo, override))
             else:
                 cur.execute(query, (repo,))
