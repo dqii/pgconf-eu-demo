@@ -7,9 +7,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pgconf_utils import ask_openai, ask_ubicloud, OPENAI_CONTEXT_WINDOW, UBICLOUD_CONTEXT_WINDOW, CONTEXT_WINDOW
 from dotenv import load_dotenv
 from backfill_embeddings import backfill
+from contextlib import contextmanager
 load_dotenv()
 
-MAX_WORKERS = 20
+MAX_WORKERS = 2
 MIN_CONNECTIONS = 1
 MAX_CONNECTIONS = 40
 
@@ -17,6 +18,16 @@ MAX_CONNECTIONS = 40
 DATABASE_URL = os.getenv("DATABASE_URL")
 connection_pool = ThreadedConnectionPool(
     MIN_CONNECTIONS, MAX_CONNECTIONS, DATABASE_URL)
+
+
+@contextmanager
+def pool_connection():
+    conn = connection_pool.getconn()
+    try:
+        yield conn
+    finally:
+        connection_pool.putconn(conn)
+
 
 # Prompts
 FILE_PROMPT = """You are a helpful code assistant. You will receive code from a file, and you will summarize what that the code does, including specific interfaces where helpful."""
@@ -73,14 +84,6 @@ INSERT_FILE_UBICLOUD = """
 """
 
 
-def get_db_connection():
-    return connection_pool.getconn()
-
-
-def release_db_connection(conn):
-    connection_pool.putconn(conn)
-
-
 def is_acceptable_file(file_name):
     ACCEPTABLE_SUFFIXES = [
         '.py', '.js', '.java', '.rb', '.go', '.rs', '.json', '.yaml', '.yml', '.xml',
@@ -103,19 +106,15 @@ def is_acceptable_folder(folder_name):
 
 
 def insert_repo(repo_name):
-    conn = get_db_connection()
-    try:
+    with pool_connection() as conn:
         with conn.cursor() as cur:
             INSERT_REPO = """INSERT INTO repos ("name") VALUES (%s) ON CONFLICT DO NOTHING;"""
             cur.execute(INSERT_REPO, (repo_name,))
         conn.commit()
-    finally:
-        release_db_connection(conn)
 
 
 def insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud):
-    conn = get_db_connection()
-    try:
+    with pool_connection() as conn:
         with conn.cursor() as cur:
             if llm_openai and llm_ubicloud:
                 cur.execute(INSERT_FOLDER, (folder_name, repo_name,
@@ -127,13 +126,10 @@ def insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud):
                 cur.execute(INSERT_FOLDER_UBICLOUD,
                             (folder_name, repo_name, llm_ubicloud.strip()))
         conn.commit()
-    finally:
-        release_db_connection(conn)
 
 
 def insert_file(file_name, folder_name, repo_name, file_content, llm_openai, llm_ubicloud):
-    conn = get_db_connection()
-    try:
+    with pool_connection() as conn:
         with conn.cursor() as cur:
             if llm_openai and llm_ubicloud:
                 cur.execute(INSERT_FILE, (file_name, folder_name, repo_name,
@@ -145,13 +141,10 @@ def insert_file(file_name, folder_name, repo_name, file_content, llm_openai, llm
                 cur.execute(INSERT_FILE_UBICLOUD, (file_name, folder_name,
                             repo_name, file_content, llm_ubicloud.strip()))
         conn.commit()
-    finally:
-        release_db_connection(conn)
 
 
 def insert_commit(repo_name, commit_id, author, date, changes, title, message, llm_openai, llm_ubicloud):
-    conn = get_db_connection()
-    try:
+    with pool_connection() as conn:
         with conn.cursor() as cur:
             if llm_openai and llm_ubicloud:
                 cur.execute(INSERT_COMMIT, (repo_name, commit_id, author, date,
@@ -163,8 +156,6 @@ def insert_commit(repo_name, commit_id, author, date, changes, title, message, l
                 cur.execute(INSERT_COMMIT_UBICLOUD, (repo_name, commit_id,
                             author, date, changes, title, message, llm_ubicloud.strip()))
         conn.commit()
-    finally:
-        release_db_connection(conn)
 
 
 def chunk_file(file_content, context_window):
@@ -204,8 +195,7 @@ def chunk_file(file_content, context_window):
 
 
 def process_file(file_path, folder_name, repo_name, provider, override):
-    conn = get_db_connection()
-    try:
+    with pool_connection() as conn:
         with conn.cursor() as cur:
             file_name = os.path.basename(file_path)
 
@@ -252,8 +242,6 @@ def process_file(file_path, folder_name, repo_name, provider, override):
                         file_content, llm_openai, llm_ubicloud)
 
             return llm_openai, llm_ubicloud
-    finally:
-        release_db_connection(conn)
 
 
 def process_files_in_folder(folder_path, repo_path, repo_name, provider, override):
@@ -299,25 +287,24 @@ def process_folder(folder_path, repo_path, repo_name, provider, override):
     print(f"Processing folder: {folder_name}")
 
     # If folder already has a summary, skip processing and just return it
-    conn = get_db_connection()
-    with conn.cursor() as cur:
-        if not override:
-            cur.execute(
-                """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_name, repo_name))
-        else:
-            cur.execute(
-                """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s AND updated_at > %s""", (folder_name, repo_name, override))
-        row = cur.fetchone()
-        if row:
-            return
+    with pool_connection() as conn:
+        with conn.cursor() as cur:
+            if not override:
+                cur.execute(
+                    """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_name, repo_name))
+            else:
+                cur.execute(
+                    """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s AND updated_at > %s""", (folder_name, repo_name, override))
+            row = cur.fetchone()
+            if row:
+                return
 
-        # Fetch summaries for subfolders from the database
-        cur.execute(
-            """SELECT "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s AND "name" LIKE %s""",
-            (repo_name, folder_name + '/%')
-        )
-        subfolder_summaries = cur.fetchall()
-    release_db_connection(conn)
+            # Fetch summaries for subfolders from the database
+            cur.execute(
+                """SELECT "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s AND "name" LIKE %s""",
+                (repo_name, folder_name + '/%')
+            )
+            subfolder_summaries = cur.fetchall()
 
     # Process all files in the current folder
     file_summaries = process_files_in_folder(
@@ -387,8 +374,7 @@ def process_commits(repo_path, repo_name, provider, override):
     with open('commit_data.txt', 'r') as file:
         lines = file.readlines()
 
-    conn = get_db_connection()
-    try:
+    with pool_connection() as conn:
         with conn.cursor() as cur:
             if not override:
                 cur.execute(
@@ -397,8 +383,6 @@ def process_commits(repo_path, repo_name, provider, override):
                 cur.execute(
                     """SELECT "id" FROM commits WHERE "repo" = %s AND updated_at > %s""", (repo_name, override))
             processed_commit_ids = {row[0] for row in cur.fetchall()}
-    finally:
-        release_db_connection(conn)
 
     commit_data_list = []
     commit_id = author_name = author_email = commit_date = title = message = ""
@@ -457,8 +441,7 @@ def process_commits(repo_path, repo_name, provider, override):
 
 
 def main(repo_name, provider=None, override=None):
-    conn = get_db_connection()
-    try:
+    with pool_connection() as conn:
         with conn.cursor() as cur:
             query = """SELECT 1 FROM repos WHERE "name" = %s"""
             if not override:
@@ -471,8 +454,6 @@ def main(repo_name, provider=None, override=None):
                 print(
                     f"Repository '{repo_name}' already processed. Exiting...")
                 return
-    finally:
-        release_db_connection(conn)
 
     repo_path = f"repos/{repo_name}"
     if not os.path.exists(repo_path):

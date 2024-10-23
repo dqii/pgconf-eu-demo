@@ -8,8 +8,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
-MAX_WORKERS = 20
-MAX_CONNECTIONS = 40
+MAX_WORKERS = 10
+MAX_CONNECTIONS = 50
 MIN_CONNECTIONS = 10
 
 # DB connection
