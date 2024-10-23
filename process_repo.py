@@ -28,10 +28,11 @@ def process_file(file_path, repo_name):
         insert_file(file_path, file_content, repo_name)
 
 
-def main(repo_name, repo_path):
+def main(repo_name):
     valid_endings = ['.rb', '.c', '.cpp', '.rs', '.cc', '.h']
 
     # Walk through the directory tree
+    repo_path = os.path.join('repos', repo_name)
     for root, dirs, files in os.walk(repo_path, topdown=False):
         for file_name in files:
             file_path = os.path.join(root, file_name)
@@ -41,9 +42,8 @@ def main(repo_name, repo_path):
 
 if len(sys.argv) > 2:
     repo_name = sys.argv[1]
-    repo_path = sys.argv[2]
-    main(repo_name, repo_path)
+    main(repo_name)
     cur.close()
     conn.close()
 else:
-    print("Usage: python process_repo.py <repo_name> <path_to_repo>")
+    print("Usage: python process_repo.py <repo_name>")
