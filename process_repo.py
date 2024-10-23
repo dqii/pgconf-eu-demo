@@ -11,7 +11,7 @@ load_dotenv()
 
 MAX_WORKERS = 20
 MIN_CONNECTIONS = 1
-MAX_CONNECTIONS = 20
+MAX_CONNECTIONS = 40
 
 # Database connection pool
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -279,7 +279,7 @@ def process_files_in_folder(folder_path, repo_path, repo_name, provider, overrid
 
 
 def get_description(descriptions, ask, context_window):
-    max_descriptions = int(context_window / 450)
+    max_descriptions = int(context_window / 480)
     if len(descriptions) < max_descriptions:
         return ask(FOLDER_PROMPT, "\n".join(descriptions))
     else:
