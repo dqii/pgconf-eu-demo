@@ -300,49 +300,50 @@ def process_folder(folder_path, repo_path, repo_name, provider, override):
 
     # If folder already has a summary, skip processing and just return it
     conn = get_db_connection()
-    with conn.cursor() as cur:
-        if not override:
+    try:
+        with conn.cursor() as cur:
+            if not override:
+                cur.execute(
+                    """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_name, repo_name))
+            else:
+                cur.execute(
+                    """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s AND updated_at > %s""", (folder_name, repo_name, override))
+            row = cur.fetchone()
+            if row:
+                return
+
+            # Fetch summaries for subfolders from the database
             cur.execute(
-                """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_name, repo_name))
-        else:
-            cur.execute(
-                """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s AND updated_at > %s""", (folder_name, repo_name, override))
-        row = cur.fetchone()
-        if row:
-            return
-
-        # Fetch summaries for subfolders from the database
-        cur.execute(
-            """SELECT "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s AND "name" LIKE %s""",
-            (repo_name, folder_name + '/%')
-        )
-        subfolder_summaries = cur.fetchall()
-
-    # Process all files in the current folder
-    file_summaries = process_files_in_folder(
-        folder_path, repo_path, repo_name, provider, override)
-
-    # Combine file summaries and subfolder summaries
-    combined_summaries = file_summaries + [
-        (llm_openai, llm_ubicloud) for llm_openai, llm_ubicloud in subfolder_summaries
-    ]
-
-    # Generate a folder summary from combined summaries
-    if len(combined_summaries) > 0:
-        llm_openai = llm_ubicloud = None
-        if provider == None or provider == 'openai':
-            llm_openai = get_description(
-                [summary[0] for summary in combined_summaries if summary[0]
-                 ], ask_openai, OPENAI_CONTEXT_WINDOW
+                """SELECT "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s AND "name" LIKE %s""",
+                (repo_name, folder_name + '/%')
             )
-        if provider == None or provider == 'ubicloud':
-            llm_ubicloud = get_description(
-                [summary[1] for summary in combined_summaries if summary[1]
-                 ], ask_ubicloud, UBICLOUD_CONTEXT_WINDOW
-            )
-        insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud)
+            subfolder_summaries = cur.fetchall()
 
-    release_db_connection(conn)
+        # Process all files in the current folder
+        file_summaries = process_files_in_folder(
+            folder_path, repo_path, repo_name, provider, override)
+
+        # Combine file summaries and subfolder summaries
+        combined_summaries = file_summaries + [
+            (llm_openai, llm_ubicloud) for llm_openai, llm_ubicloud in subfolder_summaries
+        ]
+
+        # Generate a folder summary from combined summaries
+        if len(combined_summaries) > 0:
+            llm_openai = llm_ubicloud = None
+            if provider == None or provider == 'openai':
+                llm_openai = get_description(
+                    [summary[0] for summary in combined_summaries if summary[0]
+                    ], ask_openai, OPENAI_CONTEXT_WINDOW
+                )
+            if provider == None or provider == 'ubicloud':
+                llm_ubicloud = get_description(
+                    [summary[1] for summary in combined_summaries if summary[1]
+                    ], ask_ubicloud, UBICLOUD_CONTEXT_WINDOW
+                )
+            insert_folder(folder_name, repo_name, llm_openai, llm_ubicloud)
+    finally:
+        release_db_connection(conn)
 
 
 def extract_files_changed(diff_content):
