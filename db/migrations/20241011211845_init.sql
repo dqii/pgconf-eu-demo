@@ -2,7 +2,8 @@
 create extension if not exists vector;
 
 create table if not exists repos (
-    "name" text primary key
+    "name" text primary key,
+    "updated_at" timestamp with time zone default current_timestamp,
 );
 
 create table if not exists folders (
@@ -12,6 +13,7 @@ create table if not exists folders (
     "llm_ubicloud" text,
     "vector_openai" vector(1536),
     "vector_ubicloud" vector(4096),
+    "updated_at" timestamp with time zone default current_timestamp,
     primary key ("name", "repo")
 );
 
@@ -24,6 +26,7 @@ create table if not exists files (
     "llm_ubicloud" text,
     "vector_openai" vector(1536),
     "vector_ubicloud" vector(4096),
+    "updated_at" timestamp with time zone default current_timestamp,
     primary key ("name", "folder", "repo")
 );
 
@@ -39,6 +42,7 @@ create table if not exists commits (
     "llm_ubicloud" text,
     "vector_openai" vector(1536),
     "vector_ubicloud" vector(4096),
+    "updated_at" timestamp with time zone default current_timestamp,
     primary key ("repo", "id")
 );
 

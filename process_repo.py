@@ -10,11 +10,12 @@ load_dotenv()
 
 MAX_WORKERS = 200
 MIN_CONNECTIONS = 1
+MAX_CONNECTIONS = 20
 
 # Database connection pool
 DATABASE_URL = os.getenv("DATABASE_URL")
 connection_pool = ThreadedConnectionPool(
-    MIN_CONNECTIONS, MAX_WORKERS, DATABASE_URL)
+    MIN_CONNECTIONS, MAX_CONNECTIONS, DATABASE_URL)
 
 # Prompts
 FILE_PROMPT = """You are a helpful code assistant. You will receive code from a file, and you will summarize what that the code does, including specific interfaces where helpful."""
@@ -212,9 +213,14 @@ def process_file(file_path, folder_name, repo_name, provider, override):
                     """SELECT "llm_openai", "llm_ubicloud" FROM files WHERE "name" = %s AND "folder" = %s AND "repo" = %s""",
                     (file_name, folder_name, repo_name)
                 )
-                row = cur.fetchone()
-                if row:
-                    return row
+            else:
+                cur.execute(
+                    """SELECT "llm_openai", "llm_ubicloud" FROM files WHERE "name" = %s AND "folder" = %s AND "repo" = %s AND updated_at > %s""",
+                    (file_name, folder_name, repo_name, override)
+                )
+            row = cur.fetchone()
+            if row:
+                return row
 
             def get_description(chunks, ask):
                 if len(chunks) == 1:
@@ -297,9 +303,12 @@ def process_folder(folder_path, repo_path, repo_name, provider, override):
         if not override:
             cur.execute(
                 """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s""", (folder_name, repo_name))
-            row = cur.fetchone()
-            if row:
-                return
+        else:
+            cur.execute(
+                """SELECT 1 FROM folders WHERE "name" = %s AND "repo" = %s AND updated_at > %s""", (folder_name, repo_name, override))
+        row = cur.fetchone()
+        if row:
+            return
 
         # Fetch summaries for subfolders from the database
         cur.execute(
@@ -382,10 +391,10 @@ def process_commits(repo_path, repo_name, provider, override):
             if not override:
                 cur.execute(
                     """SELECT "id" FROM commits WHERE "repo" = %s""", (repo_name,))
-                processed_commit_ids = {row[0] for row in cur.fetchall()}
             else:
-                processed_commit_ids = set()
-
+                cur.execute(
+                    """SELECT "id" FROM commits WHERE "repo" = %s AND updated_at > %s""", (repo_name, override))
+            processed_commit_ids = {row[0] for row in cur.fetchall()}
     finally:
         release_db_connection(conn)
 
@@ -445,20 +454,23 @@ def process_commits(repo_path, repo_name, provider, override):
     print("Commit processing complete.")
 
 
-def main(repo_name, provider=None, override=False):
-    if not override:
-        conn = get_db_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """SELECT "name" FROM repos WHERE "name" = %s""", (repo_name,))
-                row = cur.fetchone()
-                if row:
-                    print(
-                        f"Repository '{repo_name}' already processed. Exiting...")
-                    return
-        finally:
-            release_db_connection(conn)
+def main(repo_name, provider=None, override=None):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            query = """SELECT 1 FROM repos WHERE "name" = %s"""
+            if not override:
+                cur.execute(query, (repo_name,))
+            else:
+                query += " AND updated_at > %s"
+                cur.execute(query, (repo_name, override))
+            row = cur.fetchone()
+            if row:
+                print(
+                    f"Repository '{repo_name}' already processed. Exiting...")
+                return
+    finally:
+        release_db_connection(conn)
 
     repo_path = f"repos/{repo_name}"
     if not os.path.exists(repo_path):
@@ -484,8 +496,8 @@ if __name__ == '__main__':
     parser.add_argument("repo", help="The repository to process.")
     parser.add_argument(
         "--provider", choices=['openai', 'ubicloud'], help="Specify the provider.")
-    parser.add_argument("--override", action='store_true',
-                        help="Enable override mode.")
+    parser.add_argument(
+        "--override", help="Enable override mode, which accepts a timestamp for updated_at")
 
     args = parser.parse_args()
     main(args.repo, args.provider, args.override)

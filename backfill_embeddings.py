@@ -9,12 +9,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
 MAX_WORKERS = 200
+MAX_CONNECTIONS = 20
 MIN_CONNECTIONS = 10
 
 # DB connection
 DATABASE_URL = os.getenv("DATABASE_URL")
 connection_pool = ThreadedConnectionPool(
-    MIN_CONNECTIONS, MAX_WORKERS, DATABASE_URL)
+    MIN_CONNECTIONS, MAX_CONNECTIONS, DATABASE_URL)
 
 # SQL queries to fetch repos, folders, and files missing embeddings
 FETCH_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHERE "vector_openai" IS NULL AND "repo" = %s;"""
@@ -128,12 +129,16 @@ def update_commit_embedding(repo, commit, provider):
         release_db_connection(conn)
 
 
-def backfill_folders(repo, provider=None, override=False):
+def backfill_folders(repo, provider=None, override=None):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                FETCH_OVERRIDE_FOLDERS if override else FETCH_FOLDERS, (repo,))
+            query = FETCH_OVERRIDE_FOLDERS if override else FETCH_FOLDERS
+            if override:
+                query += " AND updated_at > %s"
+                cur.execute(query, (repo, override))
+            else:
+                cur.execute(query, (repo,))
             folders = cur.fetchall()
         print(f"Backfilling {len(folders)} folders...")
 
@@ -147,12 +152,16 @@ def backfill_folders(repo, provider=None, override=False):
         release_db_connection(conn)
 
 
-def backfill_files(repo, provider=None, override=False):
+def backfill_files(repo, provider=None, override=None):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                FETCH_OVERRIDE_FILES if override else FETCH_FILES, (repo,))
+            query = FETCH_OVERRIDE_FILES if override else FETCH_FILES
+            if override:
+                query += " AND updated_at > %s"
+                cur.execute(query, (repo, override))
+            else:
+                cur.execute(query, (repo,))
             files = cur.fetchall()
         print(f"Backfilling {len(files)} files...")
 
@@ -166,12 +175,16 @@ def backfill_files(repo, provider=None, override=False):
         release_db_connection(conn)
 
 
-def backfill_commits(repo, provider=None, override=False):
+def backfill_commits(repo, provider=None, override=None):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                FETCH_OVERRIDE_COMMITS if override else FETCH_COMMITS, (repo,))
+            query = FETCH_OVERRIDE_COMMITS if override else FETCH_COMMITS
+            if override:
+                query += " AND updated_at > %s"
+                cur.execute(query, (repo, override))
+            else:
+                cur.execute(query, (repo,))
             commits = cur.fetchall()
         print(f"Backfilling {len(commits)} commits...")
 
@@ -185,7 +198,7 @@ def backfill_commits(repo, provider=None, override=False):
         release_db_connection(conn)
 
 
-def backfill(repo, provider=None, override=False):
+def backfill(repo, provider=None, override=None):
     backfill_folders(repo, provider, override)
     backfill_files(repo, provider, override)
     backfill_commits(repo, provider, override)
@@ -199,8 +212,8 @@ if __name__ == '__main__':
                         help="The name of the repository to backfill (optional).")
     parser.add_argument(
         "--provider", choices=['openai', 'ubicloud'], help="Specify the provider.")
-    parser.add_argument("--override", action='store_true',
-                        help="Enable override mode for backfilling.")
+    parser.add_argument(
+        "--override", help="Enable override mode, which accepts a timestamp for updated_at")
 
     args = parser.parse_args()
 
