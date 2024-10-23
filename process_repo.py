@@ -29,7 +29,7 @@ def process_file(file_path, repo_name):
 
 
 def main(repo_name):
-    valid_endings = ['.rb', '.c', '.cpp', '.rs', '.cc', '.h']
+    valid_endings = ['.rb', '.c', '.cpp', '.rs', '.cc', '.h', '.js']
 
     # Walk through the directory tree
     repo_path = os.path.join('repos', repo_name)
@@ -40,10 +40,11 @@ def main(repo_name):
                 process_file(file_path, repo_name)
 
 
-if len(sys.argv) > 2:
-    repo_name = sys.argv[1]
-    main(repo_name)
-    cur.close()
-    conn.close()
-else:
-    print("Usage: python process_repo.py <repo_name>")
+if __name__ == '__main__':
+    if len(sys.argv) == 2:
+        repo_name = sys.argv[1]
+        main(repo_name)
+        cur.close()
+        conn.close()
+    else:
+        print("Usage: python process_repo.py <repo_name>")

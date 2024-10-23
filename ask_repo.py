@@ -62,10 +62,12 @@ if len(sys.argv) != 3:
     print("Usage: python qa_rag.py <repo> <question>")
     sys.exit(1)
 
-repo_name = sys.argv[1]
-question = sys.argv[2]
-main(repo_name, question)
 
-# Close database connection
-cur.close()
-conn.close()
+if __name__ == "__main__":
+    repo_name = sys.argv[1]
+    question = sys.argv[2]
+    main(repo_name, question)
+
+    # Close database connection
+    cur.close()
+    conn.close()
