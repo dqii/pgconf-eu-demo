@@ -96,7 +96,7 @@ SELECT add_embedding_job(
 Ubicloud
 
 ```bash
-psql "$DATABASE_URL" -c "SELECT add_embedding_job('files', 'description', 'vector', 'e5-mistral-7b-it', 'openai', runtime_params=>'{"base_url": "https://llama-3-2-3b-it.ai.ubicloud.com"}')"
+psql "$DATABASE_URL" -c "SELECT add_embedding_job('files', 'description', 'vector', 'e5-mistral-7b-it', 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\"}')"
 ```
 
 ## Step 5: Look at our data
