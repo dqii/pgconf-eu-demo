@@ -18,29 +18,29 @@ connection_pool = ThreadedConnectionPool(
     MIN_CONNECTIONS, MAX_CONNECTIONS, DATABASE_URL)
 
 # SQL queries to fetch repos, folders, and files missing embeddings
-FETCH_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHERE "vector_openai" IS NULL AND "repo" = %s;"""
-FETCH_FILES = """SELECT "name", "folder", "llm_openai", "llm_ubicloud" FROM files WHERE "vector_openai" IS NULL AND "repo" = %s;"""
-FETCH_COMMITS = """SELECT "repo", "id", "llm_openai", "llm_ubicloud" FROM commits WHERE "vector_openai" IS NULL AND "repo" = %s;"""
+FETCH_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHERE "vector_openai" IS NULL AND "repo" = %s"""
+FETCH_FILES = """SELECT "name", "folder", "llm_openai", "llm_ubicloud" FROM files WHERE "vector_openai" IS NULL AND "repo" = %s"""
+FETCH_COMMITS = """SELECT "repo", "id", "llm_openai", "llm_ubicloud" FROM commits WHERE "vector_openai" IS NULL AND "repo" = %s"""
 
 # SQL queries to fetch repos, folders, and files missing embeddings -- override
-FETCH_OVERRIDE_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s;"""
-FETCH_OVERRIDE_FILES = """SELECT "name", "folder", "llm_openai", "llm_ubicloud" FROM files WHERE "repo" = %s;"""
-FETCH_OVERRIDE_COMMITS = """SELECT "repo", "id", "llm_openai", "llm_ubicloud" FROM commits WHERE "repo" = %s;"""
+FETCH_OVERRIDE_FOLDERS = """SELECT "name", "llm_openai", "llm_ubicloud" FROM folders WHERE "repo" = %s"""
+FETCH_OVERRIDE_FILES = """SELECT "name", "folder", "llm_openai", "llm_ubicloud" FROM files WHERE "repo" = %s"""
+FETCH_OVERRIDE_COMMITS = """SELECT "repo", "id", "llm_openai", "llm_ubicloud" FROM commits WHERE "repo" = %s"""
 
 # SQL query to update embedding
 UPDATE_EMBEDDING_FOLDER = """UPDATE folders SET vector_openai = %s, vector_ubicloud = %s, updated_at = now() WHERE "name" = %s AND repo = %s"""
-UPDATE_EMBEDDING_FILE = """UPDATE files SET vector_openai = %s, vector_ubicloud = %s, updated_at = now( WHERE "name" = %s AND folder = %s AND repo = %s;"""
-UPDATE_EMBEDDING_COMMIT = """UPDATE commits SET vector_openai = %s, vector_ubicloud = %s, updated_at = now( WHERE "repo" = %s AND "id" = %s;"""
+UPDATE_EMBEDDING_FILE = """UPDATE files SET vector_openai = %s, vector_ubicloud = %s, updated_at = now() WHERE "name" = %s AND folder = %s AND repo = %s"""
+UPDATE_EMBEDDING_COMMIT = """UPDATE commits SET vector_openai = %s, vector_ubicloud = %s, updated_at = now() WHERE "repo" = %s AND "id" = %s"""
 
 # SQL query to update embedding -- OpenAI
-UPDATE_EMBEDDING_FOLDER_OPENAI = """UPDATE folders SET vector_openai = %s, updated_at = now( WHERE "name" = %s AND repo = %s"""
-UPDATE_EMBEDDING_FILE_OPENAI = """UPDATE files SET vector_openai = %s, updated_at = now( WHERE "name" = %s AND folder = %s AND repo = %s;"""
-UPDATE_EMBEDDING_COMMIT_OPENAI = """UPDATE commits SET vector_openai = %s, updated_at = now( WHERE "repo" = %s AND "id" = %s;"""
+UPDATE_EMBEDDING_FOLDER_OPENAI = """UPDATE folders SET vector_openai = %s, updated_at = now() WHERE "name" = %s AND repo = %s"""
+UPDATE_EMBEDDING_FILE_OPENAI = """UPDATE files SET vector_openai = %s, updated_at = now() WHERE "name" = %s AND folder = %s AND repo = %s"""
+UPDATE_EMBEDDING_COMMIT_OPENAI = """UPDATE commits SET vector_openai = %s, updated_at = now() WHERE "repo" = %s AND "id" = %s"""
 
 # SQL query to update embedding -- Ubicloud
-UPDATE_EMBEDDING_FOLDER_UBICLOUD = """UPDATE folders SET vector_ubicloud = %s, updated_at = now( WHERE "name" = %s AND repo = %s"""
-UPDATE_EMBEDDING_FILE_UBICLOUD = """UPDATE files SET vector_ubicloud = %s, updated_at = now( WHERE "name" = %s AND folder = %s AND repo = %s;"""
-UPDATE_EMBEDDING_COMMIT_UBICLOUD = """UPDATE commits SET vector_ubicloud = %s, updated_at = now( WHERE "repo" = %s AND "id" = %s;"""
+UPDATE_EMBEDDING_FOLDER_UBICLOUD = """UPDATE folders SET vector_ubicloud = %s, updated_at = now() WHERE "name" = %s AND repo = %s"""
+UPDATE_EMBEDDING_FILE_UBICLOUD = """UPDATE files SET vector_ubicloud = %s, updated_at = now() WHERE "name" = %s AND folder = %s AND repo = %s"""
+UPDATE_EMBEDDING_COMMIT_UBICLOUD = """UPDATE commits SET vector_ubicloud = %s, updated_at = now() WHERE "repo" = %s AND "id" = %s"""
 
 
 def get_db_connection():
