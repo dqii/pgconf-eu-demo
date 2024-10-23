@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pgconf_utils import ask_openai, ask_ubicloud, OPENAI_CONTEXT_WINDOW, UBICLOUD_CONTEXT_WINDOW, CONTEXT_WINDOW
 from dotenv import load_dotenv
 from backfill_embeddings import backfill
+from contextlib import contextmanager
 load_dotenv()
 
 MAX_WORKERS = 20
@@ -79,6 +80,25 @@ def get_db_connection():
 
 def release_db_connection(conn):
     connection_pool.putconn(conn)
+
+
+# note: can be used in place of the two functions above as a context manager
+# the function is currently unused, since I did not want to refactr a lot of the code,
+# in case there is unpushed changes elsewhere
+# usage example:
+# with pool_connection() as conn:
+#     with conn.cursor() as cur:
+#         cur.execute("SELECT * FROM table")
+# - connection is returned to the pool after the block is executed
+# ...
+@contextmanager
+def pool_connection():
+    conn = connection_pool.getconn()
+    try:
+        yield conn
+    finally:
+        connection_pool.putconn(conn)
+
 
 
 def is_acceptable_file(file_name):
