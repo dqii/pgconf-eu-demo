@@ -118,6 +118,12 @@ def get_prompt(provider: str, repo: str, question: str, context_types, context_f
             context.append(
                 f"FILE: {name}\nFOLDER: {folder_name}\nDESCRIPTION:\n{prompt_desc}")
 
+        # files_bm25 = query_files_bm25(provider, repo, question)
+        # for file in files_bm25:
+        #     name, code, folder_name, description = file
+        #     context.append(
+        #         f"FILE_BM25: {name}\nFOLDER: {folder_name}\nDESCRIPTION:\n{code}")
+
     if "commits" in context_types:
         commits = query_commits(provider, repo, vector)
         for commit in commits:
