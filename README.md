@@ -1,6 +1,6 @@
 # Lantern + Ubicloud Demo for PGConf EU
 
-In this demo, we'll be using Lantern and Ubicloud to build a simple chatbot that can answer questions about the Ubicloud database. Feel free to substitute the Ubicloud repository with your own database to build your own repository chatbot.
+In this demo, we'll be using Lantern and Ubicloud to build a simple chatbot that can answer questions about the Ubicloud codebase. Feel free to substitute the Ubicloud repository with your own codebase to build your own codebase expert.
 
 ## Step 1: Setup
 
@@ -107,5 +107,5 @@ psql "$DATABASE_URL" -c "SELECT name, vector FROM files LIMIT 5"
 ## Step 6: Run the chatbot to ask questions
 
 ```bash
-python app.py
+python app.py ubicloud
 ```
