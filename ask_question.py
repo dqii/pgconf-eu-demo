@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+from typing import Literal
 from pgvector.psycopg2 import register_vector
 import psycopg2
 from dotenv import load_dotenv
@@ -11,6 +12,8 @@ from pgconf_utils import generate_openai_embedding, generate_ubicloud_embedding,
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+
+ContextFormat = Literal["Code Summaries", "Raw Code"]
 
 @contextmanager
 def get_cursor():
@@ -38,6 +41,20 @@ def query_files(provider, repo, vector, top_k=5):
         cur.execute(FETCH_FILES, (repo, vector, top_k))
         files = cur.fetchall()
         return files
+
+def query_files_bm25(provider, repo, question, top_k=5):
+    FETCH_FILES_BM25 = f"""
+        SELECT name, code, folder, llm_{provider}
+        FROM search_bm25('files', 'id', ARRAY['code_stemmed'], %s, result_limit =>100)
+        LEFT JOIN files ON id = doc_id
+        WHERE repo = %s
+        LIMIT %s;
+    """
+    with get_cursor() as cur:
+        cur.execute(FETCH_FILES_BM25, (question, repo, top_k))
+        files = cur.fetchall()
+        return files
+
 
 
 def query_folders(provider, repo, vector, top_k=5):
