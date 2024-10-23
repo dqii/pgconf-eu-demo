@@ -1,12 +1,13 @@
 import gradio as gr
 from dotenv import load_dotenv
-from ask_question import ask_question
+from ask_question import ContextFormat, ask_question
+from typing import Literal, get_args
 
 load_dotenv()
 
 
-def chat_with_context(provider, repo, question, context_types):
-    return ask_question(provider, repo, question, context_types, return_prompt=True)
+def chat_with_context(provider, repo, question, context_types, context_format: ContextFormat):
+    return ask_question(provider, repo, question, context_types, context_format, return_prompt=True)
 
 
 def chat_without_context(provider, repo, question):
@@ -29,6 +30,8 @@ with gr.Blocks() as demo:
     context_types = gr.CheckboxGroup(
         ["files", "folders", "commits"], label="Select Context Types", value=["files"], interactive=True)
 
+    context_format = gr.Radio(
+        get_args(ContextFormat), label="What to pass to llm", value="Code Summaries", interactive=True)
     # Fourth row: Create a grid layout for the response panels.
     with gr.Row():
         # No context responses column.
@@ -90,15 +93,15 @@ with gr.Blocks() as demo:
             outputs=output_ubicloud_no_context
         )
         f(
-            fn=lambda repo, question, context_types: chat_with_context(
-                "openai", repo, question, context_types),
-            inputs=[repo, question, context_types],
+            fn=lambda repo, question, context_types, context_format: chat_with_context(
+                "openai", repo, question, context_types, context_format),
+            inputs=[repo, question, context_types, context_format],
             outputs=[output_openai_with_context, output_openai_with_context_prompt]
         )
         f(
-            fn=lambda repo, question, context_types: chat_with_context(
-                "ubicloud", repo, question, context_types),
-            inputs=[repo, question, context_types],
+            fn=lambda repo, question, context_types, context_format: chat_with_context(
+                "ubicloud", repo, question, context_types, context_format),
+            inputs=[repo, question, context_types, context_format],
             outputs=[output_ubicloud_with_context,
                     output_ubicloud_with_context_prompt]
         )

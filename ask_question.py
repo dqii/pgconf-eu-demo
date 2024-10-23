@@ -89,7 +89,7 @@ def query_commits(provider, repo, vector, top_k=5):
         return commits
 
 
-def get_prompt(provider: str, repo: str, question: str, context_types) -> str:
+def get_prompt(provider: str, repo: str, question: str, context_types, context_format: ContextFormat | None) -> str:
     if provider not in ["openai", "ubicloud"]:
         raise ValueError("Invalid provider. Must be 'openai' or 'ubicloud'.")
 
@@ -108,8 +108,15 @@ def get_prompt(provider: str, repo: str, question: str, context_types) -> str:
         files = query_files(provider, repo, vector)
         for file in files:
             name, code, folder_name, description = file
+
+
+            if context_format == "Raw Code":
+                prompt_desc = code
+            else:
+                prompt_desc = description
+
             context.append(
-                f"FILE: {name}\nFOLDER: {folder_name}\nDESCRIPTION:\n{description}")
+                f"FILE: {name}\nFOLDER: {folder_name}\nDESCRIPTION:\n{prompt_desc}")
 
     if "commits" in context_types:
         commits = query_commits(provider, repo, vector)
@@ -135,11 +142,11 @@ def get_prompt(provider: str, repo: str, question: str, context_types) -> str:
     return prompt
 
 
-def ask_question(provider: str, repo: str, question: str, context_types, return_prompt=False) -> str:
+def ask_question(provider: str, repo: str, question: str, context_types = None, context_format: ContextFormat | None = None, return_prompt=False) -> str | tuple[str, str]:
     if provider not in ["openai", "ubicloud"]:
         raise ValueError("Invalid provider. Must be 'openai' or 'ubicloud'.")
 
-    user_prompt = get_prompt(provider, repo, question, context_types)
+    user_prompt = get_prompt(provider, repo, question, context_types, context_format)
     system_prompt = f"You are a helpful agent who answers questions about the {repo} codebase. You will be given context about the codebase and asked questions about it. Please provide detailed answers to the best of your ability."
     ask = ask_openai if provider == "openai" else ask_ubicloud
     answer = ask(system_prompt, user_prompt)
@@ -158,9 +165,9 @@ if __name__ == '__main__':
     question = sys.argv[3]
     context_types = ["folders", "files", "commits"]
 
-    prompt = get_prompt(provider, repo_name, question, context_types)
+    prompt = get_prompt(provider, repo_name, question, context_types, "Code Summaries")
     print(prompt)
 
-    answer = ask_question(provider, repo_name, question)
+    answer = ask_question(provider, repo_name, question, context_types)
     print("Answer:")
     print(answer)
