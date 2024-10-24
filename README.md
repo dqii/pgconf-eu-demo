@@ -2,6 +2,8 @@
 
 In this demo, we'll be using Lantern and Ubicloud to build a simple chatbot that can answer questions about the Ubicloud codebase. Feel free to substitute the Ubicloud repository with your own codebase to build your own codebase expert.
 
+Below, we'll show how to build this using open-source embedding models hosted on Ubicloud, and with OpenAI embedding + LLM models.
+
 ## Step 0: Create a Lantern database
 
 To get started with Lantern, sign up at [Lantern Cloud](https://lantern.dev) and [Ubicloud](https://ubicloud.com).
@@ -35,13 +37,15 @@ ALTER SYSTEM SET lantern_extras.enable_daemon=true;
 SELECT pg_reload_conf();
 ```
 
-Set the database environment variables (if OpenAI)
+Finally, set the database environment variables.
+
+OpenAI:
 
 ```bash
 psql "$DATABASE_URL" -c "ALTER DATABASE postgres SET lantern_extras.openai_token='$OPENAI_API_KEY'"
 ```
 
-Set the database environment variables (if Ubicloud)
+Ubicloud:
 
 ```bash
 psql "$DATABASE_URL" -c "ALTER DATABASE postgres SET lantern_extras.openai_token='$UBICLOUD_API_KEY'"
@@ -75,14 +79,22 @@ Then, we'll run the following command to load the files into the database:
 python process_repo.py ubicloud
 ```
 
-## Step 4: Initialize the LLM completion job and embedding generation job
+## Step 4: Initialize the LLM completion job
 
 Initialize the LLM completion job:
 
 OpenAI
 
 ```sql
-SELECT add_completion_job('files', 'code', 'description', 'Summarize this code', 'TEXT', 'gpt-4o', 100);
+SELECT add_completion_job(
+    'files',               -- table
+    'code',                -- source column
+    'description',         -- output column
+    'Summarize this code', -- system prompt
+    'TEXT',                -- output type
+    'gpt-4o',              -- model
+    100                    -- batch size
+);
 ```
 
 Ubicloud
@@ -91,7 +103,7 @@ Ubicloud
 psql "$DATABASE_URL" -c "SELECT add_completion_job('files', 'code', 'description', '', 'TEXT', 'llama-3-2-3b-it', 50, 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\", \"context\": \"Summarize this code\" }')"
 ```
 
-Initialize the embedding generation job:
+## Step 5: Initialize the embedding generation job
 
 OpenAI
 
@@ -111,14 +123,14 @@ Ubicloud
 psql "$DATABASE_URL" -c "SELECT add_embedding_job('files', 'description', 'vector', 'e5-mistral-7b-it', 10, 'openai', runtime_params=>'{\"base_url\": \"https://e5-mistral-7b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\"}')"
 ```
 
-## Step 5: Look at our data
+## Step 6: Look at our data
 
 ```bash
 psql "$DATABASE_URL" -c "SELECT name, description FROM files LIMIT 5"
 psql "$DATABASE_URL" -c "SELECT name, vector FROM files LIMIT 5"
 ```
 
-## Step 6: Run the chatbot to ask questions
+## Step 7: Run the chatbot to ask questions
 
 ```bash
 python app.py ubicloud
