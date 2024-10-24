@@ -29,10 +29,16 @@ ALTER SYSTEM SET lantern_extras.enable_daemon=true;
 SELECT pg_reload_conf();
 ```
 
-Set the database environment variables
+Set the database environment variables (if OpenAI)
 
 ```bash
 psql "$DATABASE_URL" -c "ALTER DATABASE postgres SET lantern_extras.openai_token='$OPENAI_API_KEY'"
+```
+
+Set the database environment variables (if Ubicloud)
+
+```bash
+psql "$DATABASE_URL" -c "ALTER DATABASE postgres SET lantern_extras.openai_token='$UBICLOUD_API_KEY'"
 ```
 
 ## Step 2: Database schema
