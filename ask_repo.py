@@ -4,11 +4,14 @@ import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# OpenAI Settings
 # PROVIDER = 'openai'
 # COMPLETION_MODEL = "gpt-4o-mini"
 # EMBEDDING_MODEL = "openai/text-embedding-3-small"
+
+# Ubicloud Settings
 PROVIDER = 'ubicloud'
 COMPLETION_MODEL = "llama-3-2-3b-it"
 EMBEDDING_MODEL = "e5-mistral-7b-it"

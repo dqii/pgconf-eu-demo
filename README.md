@@ -94,14 +94,14 @@ SELECT add_completion_job(
     'This is a file from a codebase. "Please provide a detailed summary of the key concepts, structure, and important points in this file. Focus on organizing the information in a way that allows for specific follow-up questions, highlighting sections, key terms, and their relationships where possible.',
     'TEXT',                -- output type
     'gpt-4o',              -- model
-    100                    -- batch size
+    50                     -- batch size
 );
 ```
 
 Ubicloud
 
 ```bash
-psql "$DATABASE_URL" -c "SELECT add_completion_job('files', 'code', 'description', '', 'TEXT', 'llama-3-2-3b-it', 50, 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\", \"context\": \"This is a file from a codebase. "Please provide a detailed summary of the key concepts, structure, and important points in this file. Focus on organizing the information in a way that allows for specific follow-up questions, highlighting sections, key terms, and their relationships where possible.\" }')"
+psql "$DATABASE_URL" -c "SELECT add_completion_job('files', 'code', 'description', '', 'TEXT', 'llama-3-2-3b-it', 50, 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\", \"context\": \"This is a file from a codebase. Please provide a detailed summary of the key concepts, structure, and important points in this file. Focus on organizing the information in a way that allows for specific follow-up questions, highlighting sections, key terms, and their relationships where possible.\" }')"
 ```
 
 ## Step 5: Initialize the embedding generation job
