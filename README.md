@@ -2,6 +2,12 @@
 
 In this demo, we'll be using Lantern and Ubicloud to build a simple chatbot that can answer questions about the Ubicloud codebase. Feel free to substitute the Ubicloud repository with your own codebase to build your own codebase expert.
 
+## Step 0: Create a Lantern database
+
+To get started with Lantern, sign up at [Lantern Cloud](https://lantern.dev) and [Ubicloud](https://ubicloud.com).
+
+Lantern is also [open-source](https://github.com/lanterndata/lantern), so you can self-host it. The `docker-compose.yml` file in this repository can be used to run Lantern locally.
+
 ## Step 1: Setup
 
 Set the following environment variables in your `.env` file:
