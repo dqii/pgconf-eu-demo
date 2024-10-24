@@ -90,7 +90,8 @@ SELECT add_completion_job(
     'files',               -- table
     'code',                -- source column
     'description',         -- output column
-    'Summarize this code', -- system prompt
+                           -- system prompt
+    'This is a file from a codebase. "Please provide a detailed summary of the key concepts, structure, and important points in this file. Focus on organizing the information in a way that allows for specific follow-up questions, highlighting sections, key terms, and their relationships where possible.',
     'TEXT',                -- output type
     'gpt-4o',              -- model
     100                    -- batch size
@@ -100,7 +101,7 @@ SELECT add_completion_job(
 Ubicloud
 
 ```bash
-psql "$DATABASE_URL" -c "SELECT add_completion_job('files', 'code', 'description', '', 'TEXT', 'llama-3-2-3b-it', 50, 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\", \"context\": \"Summarize this code\" }')"
+psql "$DATABASE_URL" -c "SELECT add_completion_job('files', 'code', 'description', '', 'TEXT', 'llama-3-2-3b-it', 50, 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\", \"context\": \"This is a file from a codebase. "Please provide a detailed summary of the key concepts, structure, and important points in this file. Focus on organizing the information in a way that allows for specific follow-up questions, highlighting sections, key terms, and their relationships where possible.\" }')"
 ```
 
 ## Step 5: Initialize the embedding generation job
@@ -120,7 +121,7 @@ SELECT add_embedding_job(
 Ubicloud
 
 ```bash
-psql "$DATABASE_URL" -c "SELECT add_embedding_job('files', 'description', 'vector', 'e5-mistral-7b-it', 10, 'openai', runtime_params=>'{\"base_url\": \"https://e5-mistral-7b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\"}')"
+psql "$DATABASE_URL" -c "SELECT add_embedding_job('files', 'description', 'vector', 'e5-mistral-7b-it', 50, 'openai', runtime_params=>'{\"base_url\": \"https://e5-mistral-7b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\"}')"
 ```
 
 ## Step 6: Look at our data

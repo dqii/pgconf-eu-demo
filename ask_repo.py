@@ -46,7 +46,14 @@ def query_files(repo, question, top_k=10):
 def ask_question(repo, question):
     files = query_files(repo, question)
 
-    system_prompt = f"You are an expert on the code repo {repo}. You are asked questions, and provided context to help answer them. The context is the file name and description. Answer the question, using the context if and only if it is helpful"
+    system_prompt = (
+        f"You are an expert assistant for analyzing the code repository '{repo}'. "
+        f"Your role is to provide accurate and concise answers to questions based on the relevant context provided. "
+        f"The context consists of the file names and descriptions that relate to the user's question. "
+        f"Use the context to enhance your answer but do not include unnecessary details. "
+        f"Only use information from the context if it directly contributes to answering the question. "
+        f"If the context is not helpful for a particular question, respond based on general knowledge or indicate that more context is needed."
+    )
 
     context = ""
     file_count = len(files)
