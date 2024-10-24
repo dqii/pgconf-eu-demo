@@ -70,13 +70,13 @@ Initialize the LLM completion job:
 OpenAI
 
 ```sql
-SELECT add_completion_job('files', 'code', 'description', 'Summarize this code');
+SELECT add_completion_job('files', 'code', 'description', 'Summarize this code', 'TEXT', 'gpt-4o', 100);
 ```
 
 Ubicloud
 
 ```bash
-psql "$DATABASE_URL" -c "SELECT add_completion_job('files', 'code', 'description', 'Summarize this code', 'TEXT', 'llama-3-2-3b-it', 100, 'http', runtime_params=>'{\"base_url\": \"https://e5-mistral-7b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\"}')"
+psql "$DATABASE_URL" -c "SELECT add_completion_job('files', 'code', 'description', '', 'TEXT', 'llama-3-2-3b-it', 50, 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\", \"context\": \"Summarize this code\" }')"
 ```
 
 Initialize the embedding generation job:
@@ -96,7 +96,7 @@ SELECT add_embedding_job(
 Ubicloud
 
 ```bash
-psql "$DATABASE_URL" -c "SELECT add_embedding_job('files', 'description', 'vector', 'e5-mistral-7b-it', 'openai', runtime_params=>'{\"base_url\": \"https://llama-3-2-3b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\"}')"
+psql "$DATABASE_URL" -c "SELECT add_embedding_job('files', 'description', 'vector', 'e5-mistral-7b-it', 10, 'openai', runtime_params=>'{\"base_url\": \"https://e5-mistral-7b-it.ai.ubicloud.com\", \"api_token\": \"$UBICLOUD_API_KEY\"}')"
 ```
 
 ## Step 5: Look at our data
